@@ -42,6 +42,7 @@ INSTALLED_APPS = [
    
     'data_management',
     'waf_analysis',
+    'rule_analysis',
 ]
 
 MIDDLEWARE = [
