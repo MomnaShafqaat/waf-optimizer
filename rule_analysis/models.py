@@ -37,3 +37,49 @@ class RuleRelationship(models.Model):
     
     class Meta:
         unique_together = ['session', 'relationship_type', 'rule_a', 'rule_b']
+
+        
+
+
+        #momo
+
+class RulePerformance(models.Model):
+    """
+    FR05-01: Tracks how often each rule is triggered
+    LEARNING: This is like a "hit counter" for each rule
+    """
+    rule_id = models.CharField(max_length=50, unique=True)
+    hit_count = models.IntegerField(default=0)  # FR03-01
+    last_triggered = models.DateTimeField(null=True, blank=True)
+    average_evaluation_time = models.FloatField(default=0.0)  # FR03-02
+    false_positive_count = models.IntegerField(default=0)  # FR04-01
+    
+    # FR03-03: Effectiveness metrics
+    effectiveness_ratio = models.FloatField(default=0.0)  # hits vs false positives
+    
+    class Meta:
+        db_table = 'rule_performance'
+
+class RuleRankingSession(models.Model):
+    """
+    FR05-02: Stores different ranking proposals for comparison
+    LEARNING: Like saving different versions of rule order
+    """
+    name = models.CharField(max_length=255)
+    original_rules_order = models.JSONField()  # Current order
+    optimized_rules_order = models.JSONField()  # Proposed order
+    performance_improvement = models.FloatField(default=0.0)  # Expected gain
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    # FR05-03: Approval workflow
+    STATUS_CHOICES = [
+        ('proposed', 'Proposed'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+        ('applied', 'Applied'),
+    ]
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='proposed')
+    approved_by = models.ForeignKey('auth.User', null=True, blank=True, on_delete=models.SET_NULL)
+    
+    class Meta:
+        db_table = 'rule_ranking_sessions'
