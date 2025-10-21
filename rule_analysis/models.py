@@ -38,28 +38,59 @@ class RuleRelationship(models.Model):
     class Meta:
         unique_together = ['session', 'relationship_type', 'rule_a', 'rule_b']
 
-        
-
-
-        #momo
-
+# FR03: Rule Performance Profiling Models
 class RulePerformance(models.Model):
     """
-    FR05-01: Tracks how often each rule is triggered
-    LEARNING: This is like a "hit counter" for each rule
+    FR03-01: Tracks real performance data for each rule
+    FR03-02: Calculates performance metrics  
+    FR03-03: Flags inefficient rules
     """
     rule_id = models.CharField(max_length=50, unique=True)
-    hit_count = models.IntegerField(default=0)  # FR03-01
-    last_triggered = models.DateTimeField(null=True, blank=True)
-    average_evaluation_time = models.FloatField(default=0.0)  # FR03-02
-    false_positive_count = models.IntegerField(default=0)  # FR04-01
     
-    # FR03-03: Effectiveness metrics
-    effectiveness_ratio = models.FloatField(default=0.0)  # hits vs false positives
+    # FR03-01: Hit counting
+    hit_count = models.IntegerField(default=0)
+    total_requests_processed = models.IntegerField(default=0)
+    
+    # FR03-02: Performance metrics
+    match_frequency = models.FloatField(default=0.0)  # hits / total_requests
+    average_evaluation_time = models.FloatField(default=0.0)
+    effectiveness_ratio = models.FloatField(default=0.0)  # true positives / total hits
+    last_triggered = models.DateTimeField(null=True, blank=True)
+    
+    # FR03-03: Rule efficiency flags
+    is_rarely_used = models.BooleanField(default=False)
+    is_redundant = models.BooleanField(default=False)
+    is_high_performance = models.BooleanField(default=False)
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
         db_table = 'rule_performance'
+        indexes = [
+            models.Index(fields=['hit_count']),
+            models.Index(fields=['is_rarely_used']),
+            models.Index(fields=['is_redundant']),
+        ]
 
+class PerformanceSnapshot(models.Model):
+    """
+    Tracks performance over time for analytics
+    """
+    snapshot_name = models.CharField(max_length=255)
+    total_rules = models.IntegerField(default=0)
+    rarely_used_count = models.IntegerField(default=0)
+    redundant_count = models.IntegerField(default=0)
+    high_performance_count = models.IntegerField(default=0)
+    average_hit_count = models.FloatField(default=0.0)
+    snapshot_data = models.JSONField()  # Detailed metrics
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        db_table = 'performance_snapshots'
+
+# FR05: Rule Ranking Models
 class RuleRankingSession(models.Model):
     """
     FR05-02: Stores different ranking proposals for comparison
