@@ -1,4 +1,0 @@
-id,url,method,status_code
-1,/login,POST,200
-2,/search?q=select+*+from,GET,403
-3,/profile,GET,200

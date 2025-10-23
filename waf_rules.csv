@@ -1,4 +1,0 @@
-id,rule_name,pattern,action,category
-1,Block SQL Injection,.*select.*from.*,block,security
-2,Block XSS,<script>.*,block,security
-3,Allow Login Page,/login,allow,functionality
