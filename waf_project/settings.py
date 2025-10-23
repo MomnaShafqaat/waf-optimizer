@@ -39,9 +39,8 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'django_extensions',
-   
+    'threshold_tuning',
     'data_management',
-    'waf_analysis',
     'rule_analysis',
 ]
 

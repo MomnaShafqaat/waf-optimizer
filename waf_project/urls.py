@@ -8,6 +8,10 @@ urlpatterns = [
     path('api/', include('data_management.urls')),
    # path('api/', include('waf_analysis.urls')),
     path('api/', include('rule_analysis.urls')), 
+    path('', include('threshold_tuning.urls')),
+    path('api/', include('threshold_tuning.urls')),
+
+
 ]
 
 # Serve media files in development
