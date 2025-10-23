@@ -235,6 +235,16 @@ class RuleRankingSession(models.Model):
     
     class Meta:
         db_table = 'rule_ranking_sessions'
+
+from django.db import models
+
+class ThresholdSuggestion(models.Model):
+    value = models.FloatField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    approved = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"Threshold: {self.value} (Approved: {self.approved})"
     
     def __str__(self):
         ai_flag = " 🤖" if self.ai_generated else ""

@@ -193,6 +193,36 @@ def analyze_rules(request):
             {'error': f'Analysis failed: {str(e)}'},
             status=status.HTTP_400_BAD_REQUEST
         )
+    
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from .threshold_tuning import tune_threshold
+from .models import ThresholdSuggestion
+
+@api_view(['GET'])
+def threshold_tuning_view(request):
+    """
+    API endpoint that runs threshold tuning and saves result for admin approval.
+    """
+    try:
+        import os
+        from django.conf import settings
+
+        csv_path = os.path.join(settings.BASE_DIR, "data", "traffic.csv")
+        best, df = tune_threshold(csv_path)
+
+        suggestion = ThresholdSuggestion.objects.create(value=best)
+        return Response({
+            "message": "Threshold tuning completed successfully.",
+            "best_threshold": best,
+            "records_tested": len(df),
+            "saved_id": suggestion.id
+        })
+    except Exception as e:
+        print("ERROR in threshold_tuning_view:", e)
+        return Response({"error": str(e)}, status=400)
+
+
 
 @api_view(['GET'])
 def get_analysis_session(request, session_id):
