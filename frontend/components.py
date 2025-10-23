@@ -40,15 +40,66 @@ def render_file_management():
     col1, col2 = st.columns(2)
     with col1:
         st.subheader("WAF Rules")
+        st.info("""
+        **Required fields:** id, category, parameter, operator, value, phase, action, priority
+        """)
         rules_file = st.file_uploader("Upload rules CSV", type=['csv'], key="rules_upload")
     with col2:
         st.subheader("Traffic Data") 
+        st.info("""
+        **Required fields:** timestamp, src_ip, method, url
+        """)
         traffic_file = st.file_uploader("Upload traffic CSV", type=['csv'], key="traffic_upload")
 
     if rules_file or traffic_file:
         if st.button("📤 Upload Files", type="primary"):
-            # Upload logic would go here
-            st.info("File upload functionality would be implemented here")
+            upload_success = True
+            uploaded_files = []
+            
+            # Upload rules file if provided
+            if rules_file:
+                with st.spinner(f"Uploading {rules_file.name}..."):
+                    # Validate file structure
+                    is_valid, message = validate_csv_structure(rules_file, 'rules')
+                    if not is_valid:
+                        st.error(f"❌ Rules file validation failed: {message}")
+                        upload_success = False
+                    else:
+                        # Upload the file
+                        response = upload_file(rules_file, 'rules')
+                        if response and response.status_code in [200, 201]:
+                            st.success(f"✅ Successfully uploaded {rules_file.name}")
+                            uploaded_files.append(f"{rules_file.name} (Rules)")
+                        else:
+                            st.error(f"❌ Failed to upload {rules_file.name}")
+                            upload_success = False
+            
+            # Upload traffic file if provided
+            if traffic_file:
+                with st.spinner(f"Uploading {traffic_file.name}..."):
+                    # Validate file structure
+                    is_valid, message = validate_csv_structure(traffic_file, 'traffic')
+                    if not is_valid:
+                        st.error(f"❌ Traffic file validation failed: {message}")
+                        upload_success = False
+                    else:
+                        # Upload the file
+                        response = upload_file(traffic_file, 'traffic')
+                        if response and response.status_code in [200, 201]:
+                            st.success(f"✅ Successfully uploaded {traffic_file.name}")
+                            uploaded_files.append(f"{traffic_file.name} (Traffic)")
+                        else:
+                            st.error(f"❌ Failed to upload {traffic_file.name}")
+                            upload_success = False
+            
+            # Show overall result
+            if upload_success and uploaded_files:
+                st.success(f"🎉 All files uploaded successfully: {', '.join(uploaded_files)}")
+                # Refresh the files data
+                st.session_state.files_data = get_files_data()
+                st.rerun()
+            elif not upload_success:
+                st.error("❌ Some files failed to upload. Please check the errors above.")
     
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -120,9 +171,21 @@ def display_analysis_results(results):
         st.subheader("🔍 Rule Relationships")
         for rel in relationships:
             with st.expander(f"🛡️ Rule {rel.get('rule_a')} → Rule {rel.get('rule_b')} ({rel.get('relationship_type')})"):
-                st.write(f"**Confidence:** {rel.get('confidence', 'N/A')}")
-                st.write(f"**Evidence:** {rel.get('evidence_count', 'N/A')} matches")
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.write(f"**Confidence:** {rel.get('confidence', 'N/A')}")
+                with col2:
+                    st.write(f"**Evidence:** {rel.get('evidence_count', 'N/A')} matches")
                 st.write(f"**Description:** {rel.get('description', 'No description')}")
+    
+    # Recommendations
+    recommendations = data.get('recommendations', [])
+    if recommendations:
+        st.subheader("💡 Optimization Suggestions")
+        for rec in recommendations:
+            st.write(f"**{rec.get('type', 'Suggestion')}:** {rec.get('description', 'No description')}")
+            st.write(f"*Impact:* {rec.get('impact', 'Not specified')}")
+            st.markdown("---")
     
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -179,6 +242,25 @@ def render_performance_profiling():
                         with col3:
                             if flagged.get('high_performance'):
                                 st.metric("High Performers", len(flagged['high_performance']), delta="Excellent")
+                        
+                        # Show details of flagged rules
+                        with st.expander("View Flagged Rule Details"):
+                            for category, rules in flagged.items():
+                                if rules:
+                                    st.write(f"**{category.upper().replace('_', ' ')}:**")
+                                    for rule in rules:
+                                        st.write(f"- {rule['rule_id']}: {rule.get('reason', 'No reason provided')}")
+                    
+                    # Show performance metrics
+                    metrics = result.get('performance_metrics', {})
+                    if metrics:
+                        st.subheader("📈 Performance Metrics")
+                        metrics_df = pd.DataFrame.from_dict(metrics, orient='index').reset_index()
+                        metrics_df.columns = ['Rule ID', 'Match Frequency', 'Effectiveness Ratio', 'Hit Count']
+                        metrics_df['Match Frequency'] = metrics_df['Match Frequency'].apply(lambda x: f"{x:.2%}")
+                        metrics_df['Effectiveness Ratio'] = metrics_df['Effectiveness Ratio'].apply(lambda x: f"{x:.1%}")
+                        st.dataframe(metrics_df, use_container_width=True)
+                        
                 else:
                     st.error("❌ Performance analysis failed")
         else:
@@ -214,6 +296,22 @@ def render_performance_dashboard():
             st.subheader("🏆 Top Performing Rules")
             perf_df = pd.DataFrame(top_rules)
             st.dataframe(perf_df, use_container_width=True)
+        
+        # All rules with metrics
+        all_rules = dashboard_data.get('all_rules', [])
+        if all_rules:
+            with st.expander("View All Rule Performance Data"):
+                rules_df = pd.DataFrame(all_rules)
+                # Format percentages for better display
+                if 'match_frequency' in rules_df.columns:
+                    rules_df['match_frequency'] = rules_df['match_frequency'].apply(
+                        lambda x: f"{float(x):.2%}" if x else "0%"
+                    )
+                if 'effectiveness_ratio' in rules_df.columns:
+                    rules_df['effectiveness_ratio'] = rules_df['effectiveness_ratio'].apply(
+                        lambda x: f"{float(x):.1%}" if x else "0%"
+                    )
+                st.dataframe(rules_df, use_container_width=True)
     else:
         st.error("Error loading dashboard")
     
@@ -259,6 +357,62 @@ def render_rule_ranking():
                     st.error("❌ Optimization failed")
         else:
             st.warning("Please select a rules configuration")
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+
+def show_ranking_visualization(session_id):
+    """Enhanced ranking visualization"""
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.header("📈 Optimization Results")
+    
+    try:
+        response = get_ranking_comparison(session_id)
+        if response and response.status_code == 200:
+            comparison_data = response.json()
+            
+            # Enhanced metrics
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Performance Gain", f"{comparison_data['improvement']:.1f}%")
+            with col2:
+                st.metric("Rules Improved", comparison_data['summary']['rules_moved_up'])
+            with col3:
+                st.metric("Rules Adjusted", comparison_data['summary']['rules_moved_down'])
+            with col4:
+                st.metric("Avg Change", f"{comparison_data['summary']['average_position_change']:+.1f}")
+            
+            if comparison_data['comparison_data']:
+                df = pd.DataFrame(comparison_data['comparison_data'])
+                
+                # Enhanced visualization
+                fig = px.scatter(
+                    df,
+                    x='current_position',
+                    y='proposed_position',
+                    size='hit_count',
+                    color='position_change',
+                    hover_data=['rule_id', 'priority_score', 'category'],
+                    title='Rule Position Optimization',
+                    labels={
+                        'current_position': 'Current Position',
+                        'proposed_position': 'Optimized Position',
+                        'position_change': 'Improvement',
+                        'hit_count': 'Usage Frequency'
+                    }
+                )
+                
+                max_pos = max(df['current_position'].max(), df['proposed_position'].max())
+                fig.add_trace(px.line(x=[1, max_pos], y=[1, max_pos]).data[0])
+                fig.data[-1].line.dash = 'dash'
+                fig.data[-1].line.color = '#94a3b8'
+                fig.data[-1].name = 'Reference'
+                
+                st.plotly_chart(fig, use_container_width=True)
+                
+                st.info(f"💡 **Performance Insight:** Optimized rule order can improve processing speed by approximately {comparison_data['improvement']:.1f}%")
+    
+    except Exception as e:
+        st.error(f"Error loading visualization: {str(e)}")
     
     st.markdown('</div>', unsafe_allow_html=True)
 

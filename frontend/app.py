@@ -33,6 +33,11 @@ render_rule_analysis()
 render_performance_profiling()
 render_performance_dashboard()
 render_rule_ranking()
+
+# Show ranking visualization if available
+if hasattr(st.session_state, 'current_ranking_session'):
+    show_ranking_visualization(st.session_state.current_ranking_session)
+
 render_file_library()
 
 # Footer
