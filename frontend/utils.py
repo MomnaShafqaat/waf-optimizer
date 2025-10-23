@@ -102,13 +102,23 @@ def validate_csv_structure(file, file_type):
         file.seek(0)  # Reset file pointer again
         
         if file_type == 'rules':
-            required_fields = ['id', 'category', 'parameter', 'operator', 'value', 'phase', 'action', 'priority']
+            # Updated required fields for rules
+            required_fields = [
+                'rule_id', 'rule_name', 'rule_category', 'severity', 
+                'pattern', 'action', 'description'
+            ]
             missing_fields = [field for field in required_fields if field not in df.columns]
             if missing_fields:
                 return False, f"Missing required fields: {', '.join(missing_fields)}"
         
         elif file_type == 'traffic':
-            required_fields = ['timestamp', 'src_ip', 'method', 'url']
+            # Updated required fields for traffic
+            required_fields = [
+                'timestamp', 'transaction_id', 'client_ip', 'http_status', 
+                'request_method', 'request_uri', 'user_agent', 'rule_id', 
+                'rule_message', 'matched_data', 'severity', 'attack_type', 
+                'action', 'anomaly_score', 'phase'
+            ]
             missing_fields = [field for field in required_fields if field not in df.columns]
             if missing_fields:
                 return False, f"Missing required fields: {', '.join(missing_fields)}"
