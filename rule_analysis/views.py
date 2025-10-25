@@ -7,6 +7,10 @@ import json
 from .models import RuleAnalysisSession, RuleRelationship
 from data_management.models import UploadedFile
 from .analyzers import RuleRelationshipAnalyzer
+import io
+from rest_framework import status
+from django.shortcuts import get_object_or_404
+from .models import UploadedFile
 
 class RuleAnalysisSessionViewSet(viewsets.ModelViewSet):
     """ViewSet for rule analysis sessions"""
@@ -80,7 +84,7 @@ def _get_fallback_response(rules_file_id, traffic_file_id, analysis_types):
 def analyze_rules(request):
     """Enhanced rule analysis endpoint with AI integration"""
     try:
-        print("Analyze rules endpoint called!")  # Debug print
+        print("Analyze rules endpoint called!")
         
         # Get request data
         rules_file_id = request.data.get('rules_file_id')
@@ -89,34 +93,87 @@ def analyze_rules(request):
         
         print(f"Received data: rules_file_id={rules_file_id}, traffic_file_id={traffic_file_id}")
         
-        # Check if files exist
+        # Check if files exist in database
         try:
             rules_file = get_object_or_404(UploadedFile, id=rules_file_id)
             traffic_file = get_object_or_404(UploadedFile, id=traffic_file_id)
+            
+            # DEBUG: Print detailed file information
+            print(f"=== DEBUG FILE INFO ===")
+            print(f"Rules File ID: {rules_file.id}")
+            print(f"Rules File Name: {rules_file.file_name}")
+            print(f"Rules File Type: {rules_file.file_type}")
+            print(f"Rules File Size: {rules_file.file_size}")
+            print(f"Rules Has Content: {bool(rules_file.file_content)}")
+            print(f"Rules Content Length: {len(rules_file.file_content) if rules_file.file_content else 0}")
+            print(f"Rules File Path: {rules_file.file}")
+            
+            print(f"Traffic File ID: {traffic_file.id}")
+            print(f"Traffic File Name: {traffic_file.file_name}")
+            print(f"Traffic File Type: {traffic_file.file_type}")
+            print(f"Traffic File Size: {traffic_file.file_size}")
+            print(f"Traffic Has Content: {bool(traffic_file.file_content)}")
+            print(f"Traffic Content Length: {len(traffic_file.file_content) if traffic_file.file_content else 0}")
+            print(f"Traffic File Path: {traffic_file.file}")
+            print(f"=======================")
+            
         except Exception as e:
+            print(f"File not found error: {str(e)}")
             return Response(
                 {'error': f'File not found: {str(e)}'},
                 status=status.HTTP_404_NOT_FOUND
             )
         
-        # Load data from files
+        # Load data from database file_content field
         try:
-            print("Loading data from files...")
-            rules_df = pd.read_csv(rules_file.file.path)
-            traffic_df = pd.read_csv(traffic_file.file.path)
+            print("Loading data from database file_content...")
+            
+            # Get file content directly from database (not filesystem)
+            rules_content = rules_file.get_file_content()
+            traffic_content = traffic_file.get_file_content()
+            
+            print(f"Rules content type: {type(rules_content)}")
+            print(f"Traffic content type: {type(traffic_content)}")
+            print(f"Rules content is None: {rules_content is None}")
+            print(f"Traffic content is None: {traffic_content is None}")
+            
+            if not rules_content:
+                print("RULES CONTENT IS EMPTY/NONE!")
+                if rules_file.file_content:
+                    print(f"But file_content field has data: {len(rules_file.file_content)} chars")
+                    # Try to debug what's in file_content
+                    print(f"First 100 chars of file_content: {rules_file.file_content[:100] if rules_file.file_content else 'EMPTY'}")
+            
+            if not traffic_content:
+                print("TRAFFIC CONTENT IS EMPTY/NONE!")
+                if traffic_file.file_content:
+                    print(f"But file_content field has data: {len(traffic_file.file_content)} chars")
+                    print(f"First 100 chars of file_content: {traffic_file.file_content[:100] if traffic_file.file_content else 'EMPTY'}")
+            
+            if not rules_content or not traffic_content:
+                error_msg = f'File content not found in database. Rules: {bool(rules_content)}, Traffic: {bool(traffic_content)}'
+                print(error_msg)
+                return Response(
+                    {'error': error_msg},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Create DataFrames from database content
+            print("Creating DataFrames from content...")
+            rules_df = pd.read_csv(io.StringIO(rules_content))
+            traffic_df = pd.read_csv(io.StringIO(traffic_content))
             
             print(f"Rules data shape: {rules_df.shape}")
             print(f"Traffic data shape: {traffic_df.shape}")
-            print(f"Rules columns: {rules_df.columns.tolist()}")
-            print(f"Traffic columns: {traffic_df.columns.tolist()}")
             
         except Exception as e:
-            print(f"Error loading data: {str(e)}")
+            print(f"Error loading data from database: {str(e)}")
+            import traceback
+            print(f"Traceback: {traceback.format_exc()}")
             return Response(
-                {'error': f'Error loading data: {str(e)}'},
+                {'error': f'Error loading data from database: {str(e)}'},
                 status=status.HTTP_400_BAD_REQUEST
-            )
-        
+            )               
         # Perform analysis with AI
         try:
             print("Starting rule analysis with AI...")
@@ -193,7 +250,7 @@ def analyze_rules(request):
             {'error': f'Analysis failed: {str(e)}'},
             status=status.HTTP_400_BAD_REQUEST
         )
-
+       
 @api_view(['GET'])
 def get_analysis_session(request, session_id):
     """Get specific analysis session"""

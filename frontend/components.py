@@ -126,9 +126,19 @@ def render_rule_analysis():
                 default=["Shadowing", "Redundancy"]
             )
             
+            # Map full names to abbreviations
+            analysis_map = {
+                "Shadowing": "SHD",
+                "Generalization": "GEN", 
+                "Redundancy": "RXD",
+                "Correlation": "COR"
+            }
+            
             if st.button("Run Security Analysis", type="primary"):
                 with st.spinner("Analyzing rule relationships..."):
-                    response = analyze_rules(selected_rules['id'], selected_traffic['id'], analysis_types)
+                    # Convert full names to abbreviations before sending
+                    analysis_types_abbr = [analysis_map[atype] for atype in analysis_types]
+                    response = analyze_rules(selected_rules['id'], selected_traffic['id'], analysis_types_abbr)
                     
                     if response and response.status_code == 200:
                         st.success("✅ Analysis completed!")
@@ -141,7 +151,7 @@ def render_rule_analysis():
         st.error("No files available")
     
     st.markdown('</div>', unsafe_allow_html=True)
-
+    
 def display_analysis_results(results):
     """Display rule analysis results"""
     st.markdown('<div class="card">', unsafe_allow_html=True)
@@ -441,4 +451,43 @@ def render_file_library():
         )
     else:
         st.info("No files uploaded yet")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+def render_file_deletion():
+    """Render file deletion section"""
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.header("📊 Delete Files")
+
+    if st.session_state.files_data:
+        data = st.session_state.files_data
+        df = pd.DataFrame(data)
+
+        # Dropdown options: show ID, filename, and file type
+        file_options = [
+            f"ID {f['id']}: {f['file'].split('/')[-1]} ({f['file_type']})"
+            for f in data
+        ]
+
+        selected_file = st.selectbox("Select file to delete:", ["Choose a file..."] + file_options)
+
+        if selected_file != "Choose a file...":
+            if st.button("🗑️ Delete File", type="secondary"):
+                file_id = int(selected_file.split(":")[0].replace("ID ", "").strip())
+
+                try:
+                    response = delete_file(file_id)
+                    if response.status_code == 204:
+                        st.success(f"✅ File '{selected_file}' deleted successfully!")
+                        # Refresh files
+                        st.session_state.files_data = get_files_data()
+                        st.rerun()
+                    else:
+                        st.error(f"❌ Delete failed: {response.status_code} - {response.text}")
+                except Exception as e:
+                    st.error(f"🚨 Error deleting file: {e}")
+        else:
+            st.info("Please select a file to delete.")
+    else:
+        st.info("No files available for deletion.")
+
     st.markdown('</div>', unsafe_allow_html=True)

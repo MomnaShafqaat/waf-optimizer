@@ -127,3 +127,13 @@ def validate_csv_structure(file, file_type):
         
     except Exception as e:
         return False, f"Error reading file: {str(e)}"
+    
+def delete_file(file_id):
+    """Delete a file by ID"""
+    delete_url = f"{API_URL}delete/{file_id}/"
+    try:
+        response = requests.delete(delete_url)
+        return response
+    except Exception as e:
+        st.error(f"Deletion error: {str(e)}")
+        return None
