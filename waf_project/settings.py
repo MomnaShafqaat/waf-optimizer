@@ -41,8 +41,9 @@ INSTALLED_APPS = [
     'django_extensions',
    
     'data_management',
-    'waf_analysis',
+    # 'waf_analysis',
     'rule_analysis',
+    'false_positive_reduction',
 ]
 
 MIDDLEWARE = [
