@@ -109,7 +109,93 @@ def get_ranking_comparison(request, session_id):
     try:
         session = RuleRankingSession.objects.get(id=session_id)
         
-        # ... existing comparison_data code ...
+        # Build comparison data from session's rule orders
+        original_order = session.original_rules_order
+        optimized_order = session.optimized_rules_order
+        
+        comparison_data = []
+        
+        # Safety check for empty lists
+        if not original_order or not optimized_order:
+            return Response({
+                'error': 'Ranking session has empty rule orders',
+                'session_name': session.name,
+                'improvement': session.performance_improvement,
+                'status': session.status,
+                'total_rules': 0,
+                'comparison_data': []
+            }, status=400)
+        
+        # Handle both list of dicts and list of strings formats
+        # Extract rule_ids from dictionaries if needed
+        # Use 1-based positions for display (more intuitive: position 1, 2, 3...)
+        if isinstance(original_order[0], dict):
+            original_rule_ids = [rule['rule_id'] for rule in original_order]
+            original_positions = {rule['rule_id']: rule.get('position', idx + 1) for idx, rule in enumerate(original_order)}
+        else:
+            original_rule_ids = original_order
+            original_positions = {rule_id: idx + 1 for idx, rule_id in enumerate(original_order)}
+        
+        if isinstance(optimized_order[0], dict):
+            # new_position is already 1-based in the algorithm
+            optimized_positions = {rule['rule_id']: rule.get('new_position', idx + 1) for idx, rule in enumerate(optimized_order)}
+        else:
+            optimized_positions = {rule_id: idx + 1 for idx, rule_id in enumerate(optimized_order)}
+        
+        # Build comparison for each rule
+        is_dict_format = isinstance(optimized_order[0], dict)
+        
+        for rule_id in original_rule_ids:
+            original_pos = original_positions.get(rule_id, 0)
+            optimized_pos = optimized_positions.get(rule_id, 0)
+            position_change = original_pos - optimized_pos
+            
+            # Try to get data from optimized_order first (it has all the info)
+            rule_info = None
+            if is_dict_format:
+                rule_info = next((r for r in optimized_order if r['rule_id'] == rule_id), None)
+            
+            if rule_info:
+                # Use data from the optimized order
+                is_high_performance = rule_info.get('is_high_performance', False)
+                is_rarely_used = rule_info.get('is_rarely_used', False)
+                hit_count = rule_info.get('hit_count', 0)
+                priority_score = rule_info.get('priority_score', 0) * 100  # Convert to percentage
+            else:
+                # Fallback: Get performance data from database
+                try:
+                    perf = RulePerformance.objects.get(rule_id=rule_id)
+                    is_high_performance = perf.effectiveness_ratio > 0.7
+                    is_rarely_used = perf.hit_count < 10
+                    hit_count = perf.hit_count
+                    priority_score = perf.effectiveness_ratio * 100  # Convert to score
+                except RulePerformance.DoesNotExist:
+                    is_high_performance = False
+                    is_rarely_used = False
+                    hit_count = 0
+                    priority_score = 0
+            
+            # Determine category based on performance
+            if is_high_performance:
+                category = 'High Performance'
+            elif is_rarely_used:
+                category = 'Rarely Used'
+            else:
+                category = 'Normal'
+            
+            comparison_data.append({
+                'rule_id': rule_id,
+                'original_position': original_pos,
+                'optimized_position': optimized_pos,
+                'current_position': original_pos,  # Frontend expects this
+                'proposed_position': optimized_pos,  # Frontend expects this
+                'position_change': position_change,
+                'is_high_performance': is_high_performance,
+                'is_rarely_used': is_rarely_used,
+                'hit_count': max(hit_count, 1),  # Frontend expects this for size (min 1 for visibility)
+                'priority_score': priority_score,  # Frontend expects this for hover
+                'category': category  # Frontend expects this for hover
+            })
         
         # ADD FR03 INSIGHTS
         fr03_insights = {

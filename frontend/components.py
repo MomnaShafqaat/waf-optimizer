@@ -410,9 +410,57 @@ def show_ranking_visualization(session_id):
                 st.plotly_chart(fig, use_container_width=True)
                 
                 st.info(f"💡 **Performance Insight:** Optimized rule order can improve processing speed by approximately {comparison_data['improvement']:.1f}%")
+                
+                # Add detailed table view of reordered rules
+                st.subheader("📋 Detailed Rule Reordering")
+                
+                # Create display dataframe with better formatting
+                display_df = df.copy()
+                display_df = display_df.sort_values('proposed_position')
+                display_df['Position Change'] = display_df['position_change'].apply(
+                    lambda x: f"↑ {abs(x)}" if x > 0 else (f"↓ {abs(x)}" if x < 0 else "→ 0")
+                )
+                display_df['Status'] = display_df.apply(
+                    lambda row: '🔥 High Performance' if row.get('is_high_performance', False) 
+                    else ('⚠️ Rarely Used' if row.get('is_rarely_used', False) else '✓ Normal'),
+                    axis=1
+                )
+                
+                # Select and rename columns for display
+                columns_to_show = {
+                    'rule_id': 'Rule ID',
+                    'current_position': 'Original Position',
+                    'proposed_position': 'New Position',
+                    'Position Change': 'Change',
+                    'hit_count': 'Hit Count',
+                    'priority_score': 'Priority Score',
+                    'category': 'Category',
+                    'Status': 'Status'
+                }
+                
+                # Filter to only include columns that exist
+                existing_columns = [col for col in columns_to_show.keys() if col in display_df.columns]
+                table_df = display_df[existing_columns].rename(columns=columns_to_show)
+                
+                st.dataframe(
+                    table_df,
+                    use_container_width=True,
+                    height=400
+                )
+                
+                # Add download button for the ranking
+                csv = table_df.to_csv(index=False)
+                st.download_button(
+                    label="📥 Download Optimized Rule Order",
+                    data=csv,
+                    file_name=f"optimized_rules_session_{session_id}.csv",
+                    mime="text/csv"
+                )
     
     except Exception as e:
         st.error(f"Error loading visualization: {str(e)}")
+        import traceback
+        st.code(traceback.format_exc())
     
     st.markdown('</div>', unsafe_allow_html=True)
 

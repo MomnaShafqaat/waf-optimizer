@@ -102,6 +102,22 @@ def analyze_rules(request):
         # Load data from files
         try:
             print("Loading data from files...")
+            print(f"Rules file path: {rules_file.file.path}")
+            print(f"Traffic file path: {traffic_file.file.path}")
+            
+            # Check if files exist
+            import os
+            if not os.path.exists(rules_file.file.path):
+                return Response(
+                    {'error': f'Rules file not found at: {rules_file.file.path}. File name in DB: {rules_file.file.name}'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if not os.path.exists(traffic_file.file.path):
+                return Response(
+                    {'error': f'Traffic file not found at: {traffic_file.file.path}. File name in DB: {traffic_file.file.name}'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
             rules_df = pd.read_csv(rules_file.file.path)
             traffic_df = pd.read_csv(traffic_file.file.path)
             
@@ -112,6 +128,8 @@ def analyze_rules(request):
             
         except Exception as e:
             print(f"Error loading data: {str(e)}")
+            import traceback
+            print(traceback.format_exc())
             return Response(
                 {'error': f'Error loading data: {str(e)}'},
                 status=status.HTTP_400_BAD_REQUEST

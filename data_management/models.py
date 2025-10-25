@@ -6,7 +6,7 @@ class UploadedFile(models.Model):
         ('traffic', 'Traffic Data File'),
     ]
 
-    file = models.FileField()  # Removed upload_to='uploads/'
+    file = models.FileField(upload_to='uploads/')
     file_type = models.CharField(max_length=20, choices=FILE_TYPES)
     uploaded_at = models.DateTimeField(auto_now_add=True)
 
