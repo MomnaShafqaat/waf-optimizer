@@ -10,6 +10,14 @@ RANKING_COMPARISON_URL = "http://127.0.0.1:8000/api/ranking/comparison/"
 HIT_COUNTS_UPDATE_URL = "http://127.0.0.1:8000/api/hit-counts/update/"
 HIT_COUNTS_DASHBOARD_URL = "http://127.0.0.1:8000/api/hit-counts/dashboard/"
 
+# FR04: False Positive Reduction API URLs
+FALSE_POSITIVE_DETECT_URL = "http://127.0.0.1:8000/api/false-positives/detect/"
+FALSE_POSITIVE_DASHBOARD_URL = "http://127.0.0.1:8000/api/false-positives/dashboard/"
+WHITELIST_SUGGESTIONS_URL = "http://127.0.0.1:8000/api/false-positives/suggestions/"
+LEARNING_MODE_START_URL = "http://127.0.0.1:8000/api/learning-mode/start/"
+LEARNING_MODE_STATUS_URL = "http://127.0.0.1:8000/api/learning-mode/status/"
+WHITELIST_EXPORT_URL = "http://127.0.0.1:8000/api/whitelist/export/"
+
 def check_backend_status():
     """Check if backend is online"""
     try:
@@ -127,6 +135,87 @@ def validate_csv_structure(file, file_type):
         
     except Exception as e:
         return False, f"Error reading file: {str(e)}"
+
+# FR04: False Positive Reduction API Functions
+def detect_false_positives_api(session_id, detection_method, threshold):
+    """Detect false positives in WAF rules"""
+    data = {
+        'session_id': session_id,
+        'detection_method': detection_method,
+        'false_positive_threshold': threshold
+    }
+    
+    try:
+        response = requests.post(FALSE_POSITIVE_DETECT_URL, json=data, timeout=30)
+        return response
+    except Exception as e:
+        st.error(f"False positive detection error: {str(e)}")
+        return None
+
+def generate_whitelist_suggestions_api(false_positive_id, suggestion_types):
+    """Generate whitelist suggestions for false positives"""
+    data = {
+        'false_positive_id': false_positive_id,
+        'suggestion_types': suggestion_types
+    }
+    
+    try:
+        response = requests.post(WHITELIST_SUGGESTIONS_URL, json=data, timeout=30)
+        return response
+    except Exception as e:
+        st.error(f"Whitelist suggestion error: {str(e)}")
+        return None
+
+def start_learning_mode_api(session_id, learning_duration, sample_size):
+    """Start learning mode for traffic pattern analysis"""
+    data = {
+        'session_id': session_id,
+        'learning_duration_hours': learning_duration,
+        'traffic_sample_size': sample_size
+    }
+    
+    try:
+        response = requests.post(LEARNING_MODE_START_URL, json=data, timeout=30)
+        return response
+    except Exception as e:
+        st.error(f"Learning mode start error: {str(e)}")
+        return None
+
+def get_learning_mode_status_api(learning_session_id):
+    """Get learning mode status"""
+    try:
+        response = requests.get(f"{LEARNING_MODE_STATUS_URL}{learning_session_id}/")
+        return response
+    except Exception as e:
+        st.error(f"Learning mode status error: {str(e)}")
+        return None
+
+def export_whitelist_csv_api(session_id, export_name, include_patterns):
+    """Export whitelist suggestions as CSV"""
+    data = {
+        'session_id': session_id,
+        'export_name': export_name,
+        'include_patterns': include_patterns
+    }
+    
+    try:
+        response = requests.post(WHITELIST_EXPORT_URL, json=data, timeout=30)
+        return response
+    except Exception as e:
+        st.error(f"Whitelist export error: {str(e)}")
+        return None
+
+def get_false_positive_dashboard_api(session_id=None):
+    """Get false positive dashboard data"""
+    params = {}
+    if session_id:
+        params['session_id'] = session_id
+    
+    try:
+        response = requests.get(FALSE_POSITIVE_DASHBOARD_URL, params=params)
+        return response
+    except Exception as e:
+        st.error(f"Dashboard error: {str(e)}")
     
 def delete_file(file_id):
     """Delete a file by ID"""
