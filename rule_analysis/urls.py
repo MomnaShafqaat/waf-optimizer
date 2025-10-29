@@ -29,4 +29,5 @@ urlpatterns = [
     path('performance/analyze/', analyze_rule_performance, name='analyze-performance'),
     path('performance/snapshot/<int:snapshot_id>/', get_performance_snapshot, name='get-performance-snapshot'),
     path('performance/dashboard/', get_rule_performance_dashboard, name='performance-dashboard'),
+    
 ]

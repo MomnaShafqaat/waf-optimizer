@@ -41,7 +41,9 @@ INSTALLED_APPS = [
     'django_extensions',
     'threshold_tuning',
     'data_management',
+    # 'waf_analysis',
     'rule_analysis',
+    'false_positive_reduction',
 ]
 
 MIDDLEWARE = [
