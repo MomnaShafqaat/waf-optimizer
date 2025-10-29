@@ -10,12 +10,10 @@ urlpatterns = [
     path('api/', include('rule_analysis.urls')),
     path('api/', include('false_positive_reduction.urls')),
     path('api/threshold_tuning/', threshold_tuning_view),
- 
     path('api/', include('rule_analysis.urls')), 
     path('', include('threshold_tuning.urls')),
     path('api/', include('threshold_tuning.urls')),
-
-
+    
 ]
 
 # Serve media files in development
