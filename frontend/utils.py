@@ -216,4 +216,13 @@ def get_false_positive_dashboard_api(session_id=None):
         return response
     except Exception as e:
         st.error(f"Dashboard error: {str(e)}")
+    
+def delete_file(file_id):
+    """Delete a file by ID"""
+    delete_url = f"{API_URL}delete/{file_id}/"
+    try:
+        response = requests.delete(delete_url)
+        return response
+    except Exception as e:
+        st.error(f"Deletion error: {str(e)}")
         return None

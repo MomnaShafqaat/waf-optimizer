@@ -494,9 +494,19 @@ def render_rule_analysis():
                 default=["Shadowing", "Redundancy"]
             )
             
+            # Map full names to abbreviations
+            analysis_map = {
+                "Shadowing": "SHD",
+                "Generalization": "GEN", 
+                "Redundancy": "RXD",
+                "Correlation": "COR"
+            }
+            
             if st.button("Run Security Analysis", type="primary"):
                 with st.spinner("Analyzing rule relationships..."):
-                    response = analyze_rules(selected_rules['id'], selected_traffic['id'], analysis_types)
+                    # Convert full names to abbreviations before sending
+                    analysis_types_abbr = [analysis_map[atype] for atype in analysis_types]
+                    response = analyze_rules(selected_rules['id'], selected_traffic['id'], analysis_types_abbr)
                     
                     if response and response.status_code == 200:
                         st.success("✅ Analysis completed!")
@@ -509,7 +519,7 @@ def render_rule_analysis():
         st.error("No files available")
     
     st.markdown('</div>', unsafe_allow_html=True)
-
+    
 def display_analysis_results(results):
     """Display rule analysis results with enhanced design"""
     st.markdown('<div class="card">', unsafe_allow_html=True)
@@ -1215,9 +1225,57 @@ def show_ranking_visualization(session_id):
                 st.plotly_chart(fig, use_container_width=True)
                 
                 st.info(f"💡 **Performance Insight:** Optimized rule order can improve processing speed by approximately {comparison_data['improvement']:.1f}%")
+                
+                # Add detailed table view of reordered rules
+                st.subheader("📋 Detailed Rule Reordering")
+                
+                # Create display dataframe with better formatting
+                display_df = df.copy()
+                display_df = display_df.sort_values('proposed_position')
+                display_df['Position Change'] = display_df['position_change'].apply(
+                    lambda x: f"↑ {abs(x)}" if x > 0 else (f"↓ {abs(x)}" if x < 0 else "→ 0")
+                )
+                display_df['Status'] = display_df.apply(
+                    lambda row: '🔥 High Performance' if row.get('is_high_performance', False) 
+                    else ('⚠️ Rarely Used' if row.get('is_rarely_used', False) else '✓ Normal'),
+                    axis=1
+                )
+                
+                # Select and rename columns for display
+                columns_to_show = {
+                    'rule_id': 'Rule ID',
+                    'current_position': 'Original Position',
+                    'proposed_position': 'New Position',
+                    'Position Change': 'Change',
+                    'hit_count': 'Hit Count',
+                    'priority_score': 'Priority Score',
+                    'category': 'Category',
+                    'Status': 'Status'
+                }
+                
+                # Filter to only include columns that exist
+                existing_columns = [col for col in columns_to_show.keys() if col in display_df.columns]
+                table_df = display_df[existing_columns].rename(columns=columns_to_show)
+                
+                st.dataframe(
+                    table_df,
+                    use_container_width=True,
+                    height=400
+                )
+                
+                # Add download button for the ranking
+                csv = table_df.to_csv(index=False)
+                st.download_button(
+                    label="📥 Download Optimized Rule Order",
+                    data=csv,
+                    file_name=f"optimized_rules_session_{session_id}.csv",
+                    mime="text/csv"
+                )
     
     except Exception as e:
         st.error(f"Error loading visualization: {str(e)}")
+        import traceback
+        st.code(traceback.format_exc())
     
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -1597,4 +1655,43 @@ def render_file_library():
         )
     else:
         st.info("No files uploaded yet")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+def render_file_deletion():
+    """Render file deletion section"""
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.header("📊 Delete Files")
+
+    if st.session_state.files_data:
+        data = st.session_state.files_data
+        df = pd.DataFrame(data)
+
+        # Dropdown options: show ID, filename, and file type
+        file_options = [
+            f"ID {f['id']}: {f['file'].split('/')[-1]} ({f['file_type']})"
+            for f in data
+        ]
+
+        selected_file = st.selectbox("Select file to delete:", ["Choose a file..."] + file_options)
+
+        if selected_file != "Choose a file...":
+            if st.button("🗑️ Delete File", type="secondary"):
+                file_id = int(selected_file.split(":")[0].replace("ID ", "").strip())
+
+                try:
+                    response = delete_file(file_id)
+                    if response.status_code == 204:
+                        st.success(f"✅ File '{selected_file}' deleted successfully!")
+                        # Refresh files
+                        st.session_state.files_data = get_files_data()
+                        st.rerun()
+                    else:
+                        st.error(f"❌ Delete failed: {response.status_code} - {response.text}")
+                except Exception as e:
+                    st.error(f"🚨 Error deleting file: {e}")
+        else:
+            st.info("Please select a file to delete.")
+    else:
+        st.info("No files available for deletion.")
+
     st.markdown('</div>', unsafe_allow_html=True)
