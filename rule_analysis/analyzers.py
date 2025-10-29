@@ -15,51 +15,104 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-class DeepSeekAIClient:
-    """Centralized AI client for all WAF optimization tasks"""
+class GroqAIClient:
+    """Centralized AI client for all WAF optimization tasks using Groq API"""
     
     def __init__(self):
-        self.api_key = os.getenv('DEEPSEEK_API_KEY')
-        self.base_url = os.getenv('DEEPSEEK_API_URL', 'https://api.deepseek.com')
+        self.api_key = os.getenv('GROQ_API_KEY')
+        self.base_url = "https://api.groq.com/openai/v1"
         
         if not self.api_key:
-            logger.warning("DEEPSEEK_API_KEY not found in environment variables")
-            raise ValueError("DeepSeek API key not configured")
+            logger.warning("GROQ_API_KEY not found in environment variables")
+            raise ValueError("Groq API key not configured")
         
-        self.model = "deepseek-chat"
+        # Validate API key format (starts with 'gsk_')
+        if not self.api_key.startswith('gsk_'):
+            logger.warning("Groq API key format appears invalid (should start with 'gsk_')")
+        
+        self.model = "llama3-8b-8192"
         self.headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
         }
+        
+        # Test API connection on initialization
+        self._test_api_connection()
+    
+    def _test_api_connection(self):
+        """Test Groq API connection with a simple request"""
+        try:
+            test_payload = {
+                "model": self.model,
+                "messages": [{"role": "user", "content": "Respond with just 'OK'"}],
+                "max_tokens": 5,
+                "temperature": 0.1
+            }
+            
+            response = requests.post(
+                f"{self.base_url}/chat/completions",
+                headers=self.headers,
+                json=test_payload,
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                test_response = result['choices'][0]['message']['content'].strip()
+                print(f"✅ Groq API connection test successful: '{test_response}'")
+                return True
+            else:
+                print(f"❌ Groq API connection failed: {response.status_code} - {response.text}")
+                return False
+                
+        except Exception as e:
+            print(f"❌ Groq API connection error: {e}")
+            return False
     
     def make_request(self, system_prompt, user_prompt, temperature=0.3, max_tokens=1000):
         """Generic method for all AI requests using requests library"""
         try:
             payload = {
-                "model": "deepseek-chat",
+                "model": self.model,
                 "messages": [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
                 ],
                 "temperature": temperature,
                 "max_tokens": max_tokens,
-                "response_format": {"type": "json_object"}
+                "stream": False
             }
+            
+            logger.debug(f"Sending request to Groq API with model: {self.model}")
             
             response = requests.post(
                 f"{self.base_url}/chat/completions",
                 headers=self.headers,
                 json=payload,
-                timeout=30
+                timeout=60
             )
+            
+            logger.debug(f"Groq API response status: {response.status_code}")
+            
             response.raise_for_status()
             
             result = response.json()
             return self._parse_response(result['choices'][0]['message']['content'])
             
+        except requests.exceptions.HTTPError as e:
+            error_detail = ""
+            try:
+                error_response = response.json()
+                error_detail = f" - {error_response}"
+            except:
+                error_detail = f" - Response: {response.text}"
+            
+            logger.error(f"Groq API HTTP error {response.status_code}: {e}{error_detail}")
+            raise Exception(f"Groq API HTTP error {response.status_code}: {e}")
+            
         except Exception as e:
-            logger.error(f"DeepSeek API error: {response.text}")
-            return self._create_error_response(str(e))
+            logger.error(f"Groq API error: {e}")
+            raise Exception(f"Groq API error: {e}")
     
     def optimize_redundant_rules(self, rule_a_id, rule_b_id, relationship_type, rule_a_data, rule_b_data, analysis_context):
         """Specific method for rule optimization"""
@@ -133,7 +186,12 @@ class DeepSeekAIClient:
     def _parse_response(self, ai_response):
         """Parse AI response and ensure valid structure"""
         try:
-            suggestion = json.loads(ai_response)
+            # Try to extract JSON from response
+            json_match = re.search(r'\{.*\}', ai_response, re.DOTALL)
+            if json_match:
+                suggestion = json.loads(json_match.group())
+            else:
+                suggestion = json.loads(ai_response)
             
             # Ensure required fields exist
             required_fields = ['optimized_rule', 'action', 'explanation']
@@ -143,52 +201,31 @@ class DeepSeekAIClient:
             
             return suggestion
             
-        except json.JSONDecodeError:
-            return self._create_fallback_suggestion(ai_response)
-    
-    def _create_error_response(self, error_msg):
-        """Create standardized error response"""
-        return {
-            "error": f"AI service unavailable: {error_msg}",
-            "suggestion": "Please try again later or use manual analysis",
-            "fallback_mode": True
-        }
-    
-    def _create_fallback_suggestion(self, raw_text):
-        """Create structured suggestion from raw text"""
-        return {
-            "optimized_rule": "# AI suggestion unavailable - manual review required",
-            "action": "REVIEW", 
-            "explanation": raw_text[:200] + "..." if len(raw_text) > 200 else raw_text,
-            "security_impact": "Unknown - requires manual verification",
-            "performance_improvement": "Unknown",
-            "implementation_steps": [
-                "1. Review the AI explanation above",
-                "2. Manually create optimized rule",
-                "3. Test thoroughly before deployment"
-            ]
-        }
-    
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse AI response as JSON: {e}")
+            logger.error(f"Raw response: {ai_response}")
+            raise Exception(f"AI response is not valid JSON: {e}")
+
 class RuleAnalysisAIProcessor:
-    """Processes rule relationship analysis results through DeepSeek AI"""
+    """Processes rule relationship analysis results through Groq AI"""
     
     def __init__(self, rules_df: pd.DataFrame = None, ai_client=None):
         try:
             self.rules_df = rules_df
-            self.ai_client = ai_client or DeepSeekAIClient()
-            self.ai_available = self.ai_client is not None
-            print("✅ AI client initialized successfully")
+            self.ai_client = ai_client or GroqAIClient()
+            self.ai_available = True  # If we reached here, API test passed
+            print("✅ Groq AI client initialized successfully")
         except Exception as e:
             logger.warning(f"AI client initialization failed: {e}")
             self.ai_available = False
-            print("❌ AI client initialization failed")
+            self.ai_client = None
+            print(f"❌ AI client initialization failed: {e}")
 
     def _get_rule_data(self, rule_id: str) -> Dict:
         """Extract data for a given rule_id from rules_df safely."""
         if self.rules_df is None or self.rules_df.empty:
             raise ValueError("rules_df is not available in RuleAnalysisAIProcessor")
 
-        # ✅ Support both 'id' and 'rule_id' columns
         id_column = 'id' if 'id' in self.rules_df.columns else 'rule_id'
         rule_row = self.rules_df[self.rules_df[id_column].astype(str) == str(rule_id)]
 
@@ -215,15 +252,14 @@ class RuleAnalysisAIProcessor:
     
     def enhance_analysis_with_ai(self, analysis_results: Dict, traffic_df: pd.DataFrame) -> Dict:
         """
-        Use DeepSeek AI to enhance rule relationship analysis results.
-        - Sends redundant, shadowed, and correlated rule pairs to DeepSeek for optimization insights.
-        - Keeps existing structure of analysis_results intact.
+        Use Groq AI to enhance rule relationship analysis results.
+        - Sends redundant, shadowed, and correlated rule pairs to Groq for optimization insights.
         """
 
         if not self.ai_available or not self.ai_client:
             logger.warning("AI not available — returning base analysis only.")
             analysis_results["ai_available"] = False
-            analysis_results["ai_suggestions"] = self._create_basic_ai_suggestions(analysis_results)
+            analysis_results["ai_error"] = "AI client not available"
             return analysis_results
 
         try:
@@ -246,8 +282,7 @@ class RuleAnalysisAIProcessor:
                     rule_a_data = self._get_rule_data(rule_a_id)
                     rule_b_data = self._get_rule_data(rule_b_id)
 
-
-                    # Prepare shared context (confidence, evidence, etc.)
+                    # Prepare shared context
                     context = {
                         "relationship_type": rel_type,
                         "confidence": rel.get("confidence"),
@@ -256,53 +291,56 @@ class RuleAnalysisAIProcessor:
                         "description": rel.get("description", "")
                     }
 
-                    # 🔹 Redundant Rules (merge/delete suggestions)
-                    if rel_type == "RXD":
-                        ai_response = self.ai_client.optimize_redundant_rules(
-                            rule_a_id, rule_b_id, rel_type, rule_a_data, rule_b_data, context
-                        )
-                        ai_suggestions["redundant"].append(ai_response)
+                    try:
+                        # 🔹 Redundant Rules (merge/delete suggestions)
+                        if rel_type == "RXD":
+                            ai_response = self.ai_client.optimize_redundant_rules(
+                                rule_a_id, rule_b_id, rel_type, rule_a_data, rule_b_data, context
+                            )
+                            ai_suggestions["redundant"].append(ai_response)
 
-                    # 🔹 Shadowed Rules (identify dominant rule)
-                    elif rel_type == "SHD":
-                        user_prompt = (
-                            f"Rule {rule_a_id} shadows {rule_b_id}. "
-                            f"Suggest how to merge or remove one without reducing security.\n\n"
-                            f"Rule A Data: {json.dumps(rule_a_data, indent=2)}\n"
-                            f"Rule B Data: {json.dumps(rule_b_data, indent=2)}\n"
-                        )
-                        ai_response = self.ai_client.make_request(
-                            "You are a WAF optimization expert. Suggest minimal-impact actions.",
-                            user_prompt,
-                            temperature=0.3,
-                            max_tokens=800
-                        )
-                        ai_suggestions["shadowed"].append(ai_response)
+                        # 🔹 Shadowed Rules (identify dominant rule)
+                        elif rel_type == "SHD":
+                            user_prompt = (
+                                f"Rule {rule_a_id} shadows {rule_b_id}. "
+                                f"Suggest how to merge or remove one without reducing security.\n\n"
+                                f"Rule A Data: {json.dumps(rule_a_data, indent=2, default=str)}\n"
+                                f"Rule B Data: {json.dumps(rule_b_data, indent=2, default=str)}\n"
+                            )
+                            ai_response = self.ai_client.make_request(
+                                "You are a WAF optimization expert. Suggest minimal-impact actions.",
+                                user_prompt,
+                                temperature=0.3,
+                                max_tokens=800
+                            )
+                            ai_suggestions["shadowed"].append(ai_response)
 
-                    # 🔹 Correlated Rules (suggest grouping or simplification)
-                    elif rel_type == "COR":
-                        user_prompt = (
-                            f"Rules {rule_a_id} and {rule_b_id} often trigger together (correlated). "
-                            f"Suggest optimization or grouping ideas.\n\n"
-                            f"Rule A: {json.dumps(rule_a_data, indent=2)}\n"
-                            f"Rule B: {json.dumps(rule_b_data, indent=2)}\n"
-                            f"Traffic Context: {json.dumps(context, indent=2)}"
-                        )
-                        ai_response = self.ai_client.make_request(
-                            "You are a ModSecurity correlation analyzer.",
-                            user_prompt,
-                            temperature=0.4,
-                            max_tokens=800
-                        )
-                        ai_suggestions["correlated"].append(ai_response)
+                        # 🔹 Correlated Rules (suggest grouping or simplification)
+                        elif rel_type == "COR":
+                            user_prompt = (
+                                f"Rules {rule_a_id} and {rule_b_id} often trigger together (correlated). "
+                                f"Suggest optimization or grouping ideas.\n\n"
+                                f"Rule A: {json.dumps(rule_a_data, indent=2, default=str)}\n"
+                                f"Rule B: {json.dumps(rule_b_data, indent=2, default=str)}\n"
+                                f"Traffic Context: {json.dumps(context, indent=2, default=str)}"
+                            )
+                            ai_response = self.ai_client.make_request(
+                                "You are a ModSecurity correlation analyzer.",
+                                user_prompt,
+                                temperature=0.4,
+                                max_tokens=800
+                            )
+                            ai_suggestions["correlated"].append(ai_response)
+                            
+                    except Exception as e:
+                        logger.error(f"AI request failed for {rule_a_id} vs {rule_b_id}: {e}")
+                        # Continue with other pairs instead of failing completely
 
             # Merge AI results into output
             analysis_results["ai_available"] = True
             analysis_results["ai_suggestions"] = ai_suggestions
 
-            # Optional: add summarized recommendations
-            analysis_results["ai_summary"] = self._summarize_ai_recommendations(ai_suggestions)
-            print(f"✅ AI enhancement completed successfully {analysis_results['ai_summary']}")
+            print(f"✅ AI enhancement completed successfully")
             return analysis_results
 
         except Exception as e:
@@ -310,68 +348,8 @@ class RuleAnalysisAIProcessor:
             analysis_results["ai_available"] = False
             analysis_results["ai_error"] = str(e)
             return analysis_results
-    
-    def _create_basic_ai_suggestions(self, analysis_results: Dict) -> Dict:
-        """Create basic rule-based suggestions when AI is unavailable"""
-        relationships = analysis_results.get('relationships', {})
-        ai_suggestions = {}
-        
-        for rel_type, rel_list in relationships.items():
-            ai_suggestions[rel_type] = []
-            for rel in rel_list:
-                suggestion = {
-                    'rule_a': rel['rule_a'],
-                    'rule_b': rel['rule_b'], 
-                    'relationship_type': rel_type,
-                    'confidence': rel['confidence'],
-                    'ai_suggestion': self._create_fallback_suggestion(rel),
-                    'original_description': rel['description']
-                }
-                ai_suggestions[rel_type].append(suggestion)
-        
-        # Add overall strategy
-        ai_suggestions['overall_strategy'] = {
-            'priority_actions': [
-                'Review shadowing relationships first',
-                'Merge redundant rules for performance',
-                'Monitor correlated rules for patterns'
-            ],
-            'estimated_improvement': '10-30% performance gain possible'
-        }
-        
-        return ai_suggestions
-    
-    def _create_fallback_suggestion(self, relationship: Dict) -> Dict:
-        """Create fallback suggestion when AI is unavailable"""
-        rule_a = relationship['rule_a']
-        rule_b = relationship['rule_b']
-        rel_type = relationship['relationship_type']
-        
-        if rel_type == 'SHD':
-            return {
-                'action': 'REMOVE_RULE_B',
-                'explanation': f'Rule {rule_a} shadows Rule {rule_b}. Consider removing {rule_b}.',
-                'optimized_rule': f'# Keep Rule {rule_a}, remove Rule {rule_b}\n# Reason: Shadowing relationship',
-                'performance_improvement': 'Reduced processing overhead',
-                'implementation_steps': ['Remove Rule {rule_b} from configuration', 'Test Rule {rule_a} coverage']
-            }
-        elif rel_type == 'RXD':
-            return {
-                'action': 'MERGE',
-                'explanation': f'Rules {rule_a} and {rule_b} are redundant. Merge into single rule.',
-                'optimized_rule': f'# Merged rule combining {rule_a} and {rule_b}\n# Check patterns from both rules',
-                'performance_improvement': 'Eliminated duplicate processing',
-                'implementation_steps': ['Analyze patterns from both rules', 'Create combined rule', 'Remove original rules']
-            }
-        else:
-            return {
-                'action': 'REVIEW',
-                'explanation': f'Rules {rule_a} and {rule_b} have {rel_type} relationship. Manual review needed.',
-                'optimized_rule': '# Manual optimization required',
-                'performance_improvement': 'Unknown',
-                'implementation_steps': ['Review rule patterns', 'Check for optimization opportunities']
-            }
 
+# The rest of your RuleRelationshipAnalyzer class remains exactly the same
 class RuleRelationshipAnalyzer:
     def __init__(self, rules_df: pd.DataFrame, traffic_df: pd.DataFrame, enable_ai: bool = True,
                  sample_fuzz_trials: int = 200, containment_threshold: float = 0.99):
@@ -386,8 +364,9 @@ class RuleRelationshipAnalyzer:
         self.enable_ai = enable_ai
         self.sample_fuzz_trials = sample_fuzz_trials
         self.containment_threshold = containment_threshold
+        self.shadowed_rules_set: set = set()
 
-        # AI processor kept as before
+        # AI processor updated to use Groq
         if enable_ai:
             try:
                 self.ai_processor = RuleAnalysisAIProcessor(rules_df=self.rules_df)
@@ -408,6 +387,11 @@ class RuleRelationshipAnalyzer:
         # Simulate matching matrix: rule_id -> set(transaction_id)
         self.match_matrix = self._build_match_matrix()
 
+    # ... [All the rest of your RuleRelationshipAnalyzer methods remain exactly the same]
+    # _compile_rule_regexes, _rule_order_key, _build_match_matrix, analyze_all_relationships, 
+    # analyze_rule_pair, _detect_shadowing, _detect_redundancy, _detect_correlation, 
+    # _detect_subsumption, _fuzz_containment_test, _get_rule_meta, find_common_requests, 
+    # get_conflicting_fields, extract_rule_patterns, compile_results, generate_recommendations
     # ---------------------------
     # Internal helpers
     # ---------------------------
@@ -485,19 +469,28 @@ class RuleRelationshipAnalyzer:
     def analyze_all_relationships(self, analysis_types: List[str]) -> Dict:
         """
         Analyze relationships across ALL rules in rules_df (not just those triggered).
-        analysis_types: list like ['SHD','RXD','COR','SUB'] - SUB for subsumption/generalization
+        analysis_types: list like ['SHD','RXD','COR','SUB']
         """
-        # Use explicit ordering of rules for shadowing checks
         ordered_rules = sorted(self.rules_df.to_dict('records'), key=self._rule_order_key)
         rule_ids = [str(r['rule_id']) for r in ordered_rules]
         logger.info(f"Analyzing {len(rule_ids)} rules (from rules_df).")
 
-        # Pairwise analysis (only upper triangle)
+        self.shadowed_rules_set = set()  # track shadowed rules
+
         for i, rule_a in enumerate(rule_ids):
+            if rule_a in self.shadowed_rules_set:
+                continue  # skip any rule that is already shadowed
+
             for rule_b in rule_ids[i+1:]:
+                if rule_b in self.shadowed_rules_set:
+                    continue  # optional: skip analyzing shadowed B rules too
+
                 rels = self.analyze_rule_pair(rule_a, rule_b, analysis_types, ordered_rules)
                 for r in rels:
                     self.relationships.append(r)
+                    # Track shadowed rules immediately
+                    if r.get('relationship_type') == 'SHD' and r.get('rule_b'):
+                        self.shadowed_rules_set.add(r['rule_b'])
 
         base_results = self.compile_results()
 

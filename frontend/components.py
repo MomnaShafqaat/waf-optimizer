@@ -520,25 +520,6 @@ def render_rule_analysis():
     
     st.markdown('</div>', unsafe_allow_html=True)
     
-def display_analysis_results(results):
-    """Display rule analysis results with enhanced design"""
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.markdown("<h3>📊 Analysis Results</h3>", unsafe_allow_html=True) # Enhanced H3
-    
-    if 'data' in results:
-        data = results['data']
-    else:
-        data = results
-    
-    # Enhanced Metrics Display
-    metrics_data = [
-        {"label": "Rules Analyzed", "value": data.get('total_rules_analyzed', 0)},
-        {"label": "Relationships Found", "value": data.get('relationships_found', 0)},
-        {"label": "Shadowing Rules", "value": len([r for r in data.get('relationships', []) if r.get('relationship_type') == 'SHD'])},
-        {"label": "Redundant Rules", "value": len([r for r in data.get('relationships', []) if r.get('relationship_type') == 'RXD'])}
-    ]
-    
-    display_enhanced_metrics
 # # frontend/components.py
 # import streamlit as st
 # import pandas as pd
@@ -921,88 +902,49 @@ def display_analysis_results(results):
     
 #     st.markdown('</div>', unsafe_allow_html=True)
 
-# def render_rule_analysis():
-#     """Render rule analysis section"""
-#     st.markdown('<div class="card">', unsafe_allow_html=True)
-#     st.header("🔍 Security Analysis")
-
-#     if st.session_state.files_data:
-#         files_data = st.session_state.files_data
-#         rules_files = [f for f in files_data if f['file_type'] == 'rules']
-#         traffic_files = [f for f in files_data if f['file_type'] == 'traffic']
-        
-#         if rules_files and traffic_files:
-#             col1, col2 = st.columns(2)
-#             with col1:
-#                 selected_rules = st.selectbox("Rules File:", options=rules_files, format_func=lambda x: x['file'].split('/')[-1])
-#             with col2:
-#                 selected_traffic = st.selectbox("Traffic File:", options=traffic_files, format_func=lambda x: x['file'].split('/')[-1])
-            
-#             analysis_types = st.multiselect(
-#                 "Analysis Types:",
-#                 options=["Shadowing", "Generalization", "Redundancy", "Correlation"],
-#                 default=["Shadowing", "Redundancy"]
-#             )
-            
-#             if st.button("Run Security Analysis", type="primary"):
-#                 with st.spinner("Analyzing rule relationships..."):
-#                     response = analyze_rules(selected_rules['id'], selected_traffic['id'], analysis_types)
-                    
-#                     if response and response.status_code == 200:
-#                         st.success("✅ Analysis completed!")
-#                         display_analysis_results(response.json())
-#                     else:
-#                         st.error("Analysis failed - check backend connection")
-#         else:
-#             st.warning("Upload both rules and traffic files")
-#     else:
-#         st.error("No files available")
+def display_analysis_results(results):
+    """Display rule analysis results with enhanced design"""
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.header("📊 Analysis Results")
     
-#     st.markdown('</div>', unsafe_allow_html=True)
-
-# def display_analysis_results(results):
-#     """Display rule analysis results with enhanced design"""
-#     st.markdown('<div class="card">', unsafe_allow_html=True)
-#     st.header("📊 Analysis Results")
+    if 'data' in results:
+        data = results['data']
+    else:
+        data = results
     
-#     if 'data' in results:
-#         data = results['data']
-#     else:
-#         data = results
+    # Enhanced Metrics Display
+    metrics_data = [
+        {"label": "Rules Analyzed", "value": data.get('total_rules_analyzed', 0)},
+        {"label": "Relationships Found", "value": data.get('relationships_found', 0)},
+        {"label": "Shadowing Rules", "value": len([r for r in data.get('relationships', []) if r.get('relationship_type') == 'SHD'])},
+        {"label": "Redundant Rules", "value": len([r for r in data.get('relationships', []) if r.get('relationship_type') == 'RXD'])}
+    ]
     
-#     # Enhanced Metrics Display
-#     metrics_data = [
-#         {"label": "Rules Analyzed", "value": data.get('total_rules_analyzed', 0)},
-#         {"label": "Relationships Found", "value": data.get('relationships_found', 0)},
-#         {"label": "Shadowing Rules", "value": len([r for r in data.get('relationships', []) if r.get('relationship_type') == 'SHD'])},
-#         {"label": "Redundant Rules", "value": len([r for r in data.get('relationships', []) if r.get('relationship_type') == 'RXD'])}
-#     ]
+    display_enhanced_metrics(metrics_data)
     
-#     display_enhanced_metrics(metrics_data)
+    # Relationships
+    relationships = data.get('relationships', [])
+    if relationships:
+        st.subheader("🔍 Rule Relationships")
+        for rel in relationships:
+            with st.expander(f"🛡️ Rule {rel.get('rule_a')} → Rule {rel.get('rule_b')} ({rel.get('relationship_type')})"):
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.write(f"**Confidence:** {rel.get('confidence', 'N/A')}")
+                with col2:
+                    st.write(f"**Evidence:** {rel.get('evidence_count', 'N/A')} matches")
+                st.write(f"**Description:** {rel.get('description', 'No description')}")
     
-#     # Relationships
-#     relationships = data.get('relationships', [])
-#     if relationships:
-#         st.subheader("🔍 Rule Relationships")
-#         for rel in relationships:
-#             with st.expander(f"🛡️ Rule {rel.get('rule_a')} → Rule {rel.get('rule_b')} ({rel.get('relationship_type')})"):
-#                 col1, col2 = st.columns(2)
-#                 with col1:
-#                     st.write(f"**Confidence:** {rel.get('confidence', 'N/A')}")
-#                 with col2:
-#                     st.write(f"**Evidence:** {rel.get('evidence_count', 'N/A')} matches")
-#                 st.write(f"**Description:** {rel.get('description', 'No description')}")
+    # Recommendations
+    recommendations = data.get('recommendations', [])
+    if recommendations:
+        st.subheader("💡 Optimization Suggestions")
+        for rec in recommendations:
+            st.write(f"**{rec.get('type', 'Suggestion')}:** {rec.get('description', 'No description')}")
+            st.write(f"*Impact:* {rec.get('impact', 'Not specified')}")
+            st.markdown("---")
     
-#     # Recommendations
-#     recommendations = data.get('recommendations', [])
-#     if recommendations:
-#         st.subheader("💡 Optimization Suggestions")
-#         for rec in recommendations:
-#             st.write(f"**{rec.get('type', 'Suggestion')}:** {rec.get('description', 'No description')}")
-#             st.write(f"*Impact:* {rec.get('impact', 'Not specified')}")
-#             st.markdown("---")
-    
-#     st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
 def render_performance_profiling():
     """FR03: Performance Profiling Section"""
@@ -1279,18 +1221,35 @@ def show_ranking_visualization(session_id):
     
     st.markdown('</div>', unsafe_allow_html=True)
 
-# def display_enhanced_metrics(metrics_data):
-#     """Display metrics with enhanced dark theme design"""
-#     cols = st.columns(len(metrics_data))
+def display_enhanced_metrics(metrics_data):
+    """Display metrics with enhanced dark theme design"""
+    cols = st.columns(len(metrics_data))
     
-#     for i, metric in enumerate(metrics_data):
-#         with cols[i]:
-#             st.markdown(f"""
-#             <div class="metric-card">
-#                 <div class="metric-value">{metric['value']}</div>
-#                 <div class="metric-label">{metric['label']}</div>
-#             </div>
-#             """, unsafe_allow_html=True)
+    for i, metric in enumerate(metrics_data):
+        with cols[i]:
+            st.markdown(f"""
+            <div class="metric-card" style="
+                background-color: #1E1E1E;
+                border: 1px solid #333;
+                border-radius: 12px;
+                padding: 16px;
+                text-align: center;
+                box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+                transition: transform 0.2s;
+            ">
+                <div class="metric-value" style="
+                    font-size: 26px;
+                    font-weight: bold;
+                    color: #00C853;
+                    margin-bottom: 6px;
+                ">{metric['value']}</div>
+                <div class="metric-label" style="
+                    font-size: 14px;
+                    color: #BBBBBB;
+                    text-transform: uppercase;
+                ">{metric['label']}</div>
+            </div>
+            """, unsafe_allow_html=True)
 
 def render_false_positive_management():
     """FR04: False Positive Reduction Management with enhanced design"""
