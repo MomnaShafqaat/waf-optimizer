@@ -151,164 +151,200 @@ def detect_false_positives(request):
         })
     except Exception as e:
         return Response({'error': str(e)}, status=400)
+@api_view(['POST'])
+def render_whitelist_suggestions():
+    """FR04-02: Whitelist Suggestions"""
+    st.subheader("📝 Whitelist Suggestions")
+    st.write("Generate intelligent whitelist patterns to reduce false positives")
+    
+    if st.session_state.files_data:
+        files_data = st.session_state.files_data
+        rules_files = [f for f in files_data if f['file_type'] == 'rules']
+        traffic_files = [f for f in files_data if f['file_type'] == 'traffic']
 
+        if rules_files and traffic_files:
+            st.markdown("### False Positive Data Selection")
+            col1, col2 = st.columns(2)
+            with col1:
+                selected_rules_for_fp = st.selectbox(
+                    "Select Rules File:",
+                    options=rules_files,
+                    format_func=lambda x: x['file'].split('/')[-1],
+                    key="suggestions_rules_select"
+                )
+            with col2:
+                selected_traffic_for_fp = st.selectbox(
+                    "Select Traffic File:",
+                    options=traffic_files,
+                    format_func=lambda x: x['file'].split('/')[-1],
+                    key="suggestions_traffic_select"
+                )
+
+            # In a real scenario, you'd fetch the actual false positives based on the selected files
+            # For now, we use mock data, but the idea is that 'selected_fp' would come from
+            # a previous false positive detection run using the selected rules/traffic files.
+            
+            # This part needs to be dynamically populated by a prior run of False Positive Detection
+            # For demonstration, we'll keep the mock data for selecting a false positive ID.
+            # In a production app, you would likely store the false positives detected
+            # in session_state after render_false_positive_detection runs.
+            false_positives = st.session_state.get('detected_false_positives', [
+                {"id": 1, "rule_id": "1001", "false_positive_rate": 0.15, "status": "detected"},
+                {"id": 2, "rule_id": "1002", "false_positive_rate": 0.22, "status": "analyzing"},
+                {"id": 3, "rule_id": "1003", "false_positive_rate": 0.18, "status": "detected"},
+            ])
+            
+            if false_positives:
+                st.markdown("### Suggestion Settings")
+                col1, col2 = st.columns(2)
+                with col1:
+                    selected_fp = st.selectbox(
+                        "Select Detected False Positive:",
+                        options=false_positives,
+                        format_func=lambda x: f"Rule {x['rule_id']} ({x['false_positive_rate']:.1%} FP Rate)",
+                        key="fp_select"
+                    )
+                with col2:
+                    suggestion_types = st.multiselect(
+                        "Suggestion Types:",
+                        options=["ip_whitelist", "path_whitelist", "user_agent_whitelist", "parameter_whitelist"],
+                        default=["ip_whitelist", "path_whitelist"],
+                        key="suggestion_types"
+                    )
+                
+                if st.button("💡 Generate Suggestions", type="primary", key="generate_suggestions"):
+                    if selected_fp and suggestion_types:
+                        with st.spinner("Generating whitelist suggestions..."):
+                            response = generate_whitelist_suggestions_api(selected_fp['id'], suggestion_types)
+                            
+                            if response and response.status_code == 200:
+                                result = response.json()
+                                st.success(f"✅ {result['message']}")
+                                
+                                # Display suggestions
+                                suggestions = result['data']['suggestions']
+                                if suggestions:
+                                    st.subheader("🎯 Generated Suggestions")
+                                    for suggestion in suggestions:
+                                        with st.expander(f"{suggestion['type'].replace('_', ' ').title()} - {suggestion['estimated_reduction']:.0f}% Reduction"):
+                                            col1, col2 = st.columns(2)
+                                            with col1:
+                                                st.write(f"**Description:** {suggestion['description']}")
+                                                st.write(f"**Risk Assessment:** {suggestion['risk_assessment'].title()}")
+                                            with col2:
+                                                st.write(f"**Estimated Reduction:** {suggestion['estimated_reduction']:.0f}%")
+                                                st.write(f"**Type:** {suggestion['type'].replace('_', ' ').title()}")
+                            else:
+                                st.error("❌ Suggestion generation failed")
+                    else:
+                        st.warning("Please select a false positive and suggestion types")
+            else:
+                st.info("No false positives detected yet. Run detection first.")
+        else:
+            st.warning("Please upload both Rules and Traffic files to get whitelist suggestions.")
+    else:
+        st.error("No uploaded files found in session.")
 
 @api_view(['POST'])
-def generate_whitelist_suggestions(request):
-    """FR04-02: Suggest whitelisting patterns to reduce false positives"""
-    try:
-        false_positive_id = request.data.get('false_positive_id')
-        suggestion_types = request.data.get('suggestion_types', ['ip_whitelist', 'path_whitelist'])
-        
-        if not false_positive_id:
-            return Response({'error': 'false_positive_id is required'}, status=400)
-        
-        fp_detection = get_object_or_404(FalsePositiveDetection, id=false_positive_id)
-        patterns = fp_detection.request_patterns
-        
-        suggestions = []
-        
-        # IP Whitelist Suggestions
-        common_ips = patterns.get('common_ips', [])
-        if 'ip_whitelist' in suggestion_types and common_ips:
-            # Calculate potential reduction based on IP frequency
-            estimated_reduction = min(60.0, len(common_ips) * 10)
+def render_learning_mode():
+    """FR04-03: Learning Mode"""
+    st.subheader("🧠 Learning Mode")
+    st.write("Enable adaptive learning to understand normal traffic patterns")
+    
+    if st.session_state.files_data:
+        files_data = st.session_state.files_data
+        rules_files = [f for f in files_data if f['file_type'] == 'rules']
+        traffic_files = [f for f in files_data if f['file_type'] == 'traffic']
+
+        if rules_files and traffic_files:
+            st.markdown("### File Selection")
+            col1, col2 = st.columns(2)
+            with col1:
+                selected_rules_for_learning = st.selectbox(
+                    "Select Rules File for Learning:",
+                    options=rules_files,
+                    format_func=lambda x: x['file'].split('/')[-1],
+                    key="learning_rules_select"
+                )
+            with col2:
+                selected_traffic_for_learning = st.selectbox(
+                    "Select Traffic File for Learning:",
+                    options=traffic_files,
+                    format_func=lambda x: x['file'].split('/')[-1],
+                    key="learning_traffic_select"
+                )
             
-            suggestion = WhitelistSuggestion.objects.create(
-                false_positive=fp_detection,
-                suggestion_type='ip_whitelist',
-                pattern_description=f"Whitelist trusted IPs: {', '.join(common_ips[:5])}",
-                pattern_conditions={'ip_addresses': common_ips},
-                estimated_false_positive_reduction=estimated_reduction,
-                security_risk_assessment=assess_ip_risk(common_ips),
-                implementation_priority='high'
-            )
-            suggestions.append({
-                'id': suggestion.id,
-                'type': 'ip_whitelist',
-                'description': suggestion.pattern_description,
-                'estimated_reduction': suggestion.estimated_false_positive_reduction,
-                'risk_assessment': suggestion.security_risk_assessment,
-                'priority': suggestion.implementation_priority
-            })
-
-        # Path Whitelist Suggestions
-        common_paths = patterns.get('common_paths', [])
-        if 'path_whitelist' in suggestion_types and common_paths:
-            estimated_reduction = min(50.0, len(common_paths) * 8)
+            st.markdown("### Learning Settings")
+            col1, col2 = st.columns(2)
+            with col1:
+                learning_duration = st.slider("Learning Duration (hours):", 1, 72, 24)
+            with col2:
+                sample_size = st.number_input("Traffic Sample Size:", 100, 10000, 1000)
             
-            # Create regex pattern for paths
-            escaped_paths = [path.replace('/', '\\/') for path in common_paths]
-            regex_pattern = f"^({'|'.join(escaped_paths)})$"
-            
-            suggestion = WhitelistSuggestion.objects.create(
-                false_positive=fp_detection,
-                suggestion_type='path_whitelist',
-                pattern_description=f"Whitelist legitimate paths: {', '.join(common_paths[:3])}",
-                pattern_regex=regex_pattern,
-                pattern_conditions={'paths': common_paths},
-                estimated_false_positive_reduction=estimated_reduction,
-                security_risk_assessment=assess_path_risk(common_paths),
-                implementation_priority='medium'
-            )
-            suggestions.append({
-                'id': suggestion.id,
-                'type': 'path_whitelist',
-                'description': suggestion.pattern_description,
-                'estimated_reduction': suggestion.estimated_false_positive_reduction,
-                'risk_assessment': suggestion.security_risk_assessment,
-                'priority': suggestion.implementation_priority
-            })
+            if st.button("🚀 Start Learning Mode", type="primary", key="start_learning"):
+                rules_file_id = selected_rules_for_learning['id']
+                traffic_file_id = selected_traffic_for_learning['id']
 
-        # User Agent Whitelist
-        if 'user_agent_whitelist' in suggestion_types and patterns.get('common_user_agents'):
-            user_agents = patterns['common_user_agents'][:3]
-            suggestion = WhitelistSuggestion.objects.create(
-                false_positive=fp_detection,
-                suggestion_type='user_agent_whitelist',
-                pattern_description=f"Whitelist legitimate user agents",
-                pattern_conditions={'user_agents': user_agents},
-                estimated_false_positive_reduction=30.0,
-                security_risk_assessment='medium',
-                implementation_priority='low'
-            )
-            suggestions.append({
-                'id': suggestion.id,
-                'type': 'user_agent_whitelist',
-                'description': suggestion.pattern_description,
-                'estimated_reduction': suggestion.estimated_false_positive_reduction,
-                'risk_assessment': suggestion.security_risk_assessment,
-                'priority': suggestion.implementation_priority
-            })
-
-        return Response({
-            'status': 'success',
-            'message': f"Generated {len(suggestions)} whitelist suggestions for rule {fp_detection.rule_id}",
-            'data': {
-                'false_positive_id': false_positive_id,
-                'rule_id': fp_detection.rule_id,
-                'suggestions': suggestions,
-                'total_suggestions': len(suggestions)
-            }
-        })
-    except Exception as e:
-        return Response({'error': str(e)}, status=400)
-
-
-@api_view(['POST'])
-def start_learning_mode(request):
-    """FR04-03: Learning Mode to track normal traffic behavior"""
-    try:
-        session_id = request.data.get('session_id')
-        learning_duration_hours = request.data.get('learning_duration_hours', 24)
-        traffic_sample_size = request.data.get('traffic_sample_size', 1000)
+                with st.spinner("Starting learning mode analysis..."):
+                    response = start_learning_mode_api(rules_file_id, traffic_file_id, learning_duration, sample_size)
+                    
+                    if response and response.status_code == 200:
+                        result = response.json()
+                        st.success(f"✅ {result['message']}")
+                        
+                        # Display learning results
+                        data = result['data']
+                        col1, col2, col3, col4 = st.columns(4)
+                        with col1:
+                            st.metric("Learning Session ID", data['learning_session_id'])
+                        with col2:
+                            st.metric("Patterns Learned", data['patterns_learned'])
+                        with col3:
+                            st.metric("Accuracy Score", f"{data['accuracy_score']:.1%}")
+                        with col4:
+                            st.metric("Status", data['status'].title())
+                        
+                        # Store learning session for status checking
+                        st.session_state.current_learning_session = data['learning_session_id']
+                    else:
+                        st.error("❌ Learning mode start failed")
+        else:
+            st.warning("Please upload both Rules and Traffic files to start learning mode.")
+    else:
+        st.error("No uploaded files found in session.")
+    
+    # Show learning status if active
+    if hasattr(st.session_state, 'current_learning_session'):
+        st.subheader("📊 Learning Status")
+        learning_session_id = st.session_state.current_learning_session
         
-        if not session_id:
-            return Response({'error': 'session_id is required'}, status=400)
-        
-        session = get_object_or_404(RuleAnalysisSession, id=session_id)
-
-        learning_session = LearningModeSession.objects.create(
-            name=f"Learning Mode - {session.name} - {datetime.now().strftime('%Y%m%d_%H%M%S')}",
-            session=session,
-            learning_duration_hours=learning_duration_hours,
-            traffic_sample_size=traffic_sample_size,
-            status='active'
-        )
-
-        # Analyze traffic to learn patterns
-        if session.traffic_file and os.path.exists(session.traffic_file.file.path):
-            traffic_df = pd.read_csv(session.traffic_file.file.path)
-            traffic_sample = traffic_df.head(traffic_sample_size)
-            
-            # Learn normal traffic patterns
-            normal_patterns = learn_traffic_patterns(traffic_sample)
-            baseline = calculate_baseline_metrics(traffic_sample)
-            thresholds = calculate_anomaly_thresholds(baseline)
-            
-            learning_session.normal_traffic_patterns = normal_patterns
-            learning_session.baseline_metrics = baseline
-            learning_session.anomaly_thresholds = thresholds
-            learning_session.patterns_learned = len(normal_patterns.get('common_paths', [])) + len(normal_patterns.get('common_ips', []))
-            learning_session.accuracy_score = 0.85  # Initial estimate
-            learning_session.save()
-
-        return Response({
-            'status': 'success',
-            'message': 'Learning Mode started successfully',
-            'data': {
-                'learning_session_id': learning_session.id,
-                'session_id': session_id,
-                'learning_duration_hours': learning_duration_hours,
-                'traffic_sample_size': traffic_sample_size,
-                'patterns_learned': learning_session.patterns_learned,
-                'accuracy_score': learning_session.accuracy_score,
-                'status': learning_session.status
-            }
-        })
-    except Exception as e:
-        return Response({'error': str(e)}, status=400)
-
+        if st.button("🔄 Refresh Learning Status", key="refresh_learning"):
+            with st.spinner("Checking learning status..."):
+                response = get_learning_mode_status_api(learning_session_id)
+                
+                if response and response.status_code == 200:
+                    status_data = response.json()['data']
+                    
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("Status", status_data['status'].title())
+                    with col2:
+                        st.metric("Patterns Learned", status_data['patterns_learned'])
+                    with col3:
+                        st.metric("Accuracy", f"{status_data['accuracy_score']:.1%}")
+                    
+                    # Show learned patterns
+                    if status_data.get('normal_traffic_patterns'):
+                        with st.expander("View Learned Patterns"):
+                            patterns = status_data['normal_traffic_patterns']
+                            st.write("**User Agents:**")
+                            for ua in patterns.get('user_agents', [])[:3]:
+                                st.write(f"- {ua}")
+                            st.write("**Common Paths:**")
+                            for path in patterns.get('common_paths', [])[:5]:
+                                st.write(f"- {path}")
+                else:
+                    st.error("❌ Failed to retrieve learning status.")
 
 @api_view(['GET'])
 def get_learning_mode_status(request, learning_session_id):
@@ -412,24 +448,80 @@ def export_whitelist_csv(request):
 
 
 @api_view(['GET'])
-def download_whitelist_export(request, export_id):
-    """Download exported whitelist CSV file"""
-    try:
-        export_record = get_object_or_404(WhitelistExport, id=export_id)
-        
-        if export_record.status != 'completed' or not export_record.file_path:
-            return Response({'error': 'Export not ready or failed'}, status=400)
-        
-        if not os.path.exists(export_record.file_path):
-            return Response({'error': 'Export file not found'}, status=404)
-        
-        with open(export_record.file_path, 'rb') as f:
-            response = HttpResponse(f.read(), content_type='text/csv')
-            response['Content-Disposition'] = f'attachment; filename="{export_record.export_name}"'
-            return response
-    except Exception as e:
-        return Response({'error': str(e)}, status=400)
+def render_whitelist_export():
+    """FR04-04: Whitelist Export"""
+    st.subheader("📤 Export Whitelist")
+    st.write("Export suggested whitelist patterns as CSV file")
+    
+    if st.session_state.files_data:
+        files_data = st.session_state.files_data
+        rules_files = [f for f in files_data if f['file_type'] == 'rules']
+        traffic_files = [f for f in files_data if f['file_type'] == 'traffic']
 
+        if rules_files and traffic_files:
+            st.markdown("### Export Scope")
+            col1, col2 = st.columns(2)
+            with col1:
+                selected_rules_for_export = st.selectbox(
+                    "Select Rules File for Export Context:",
+                    options=rules_files,
+                    format_func=lambda x: x['file'].split('/')[-1],
+                    key="export_rules_select"
+                )
+            with col2:
+                selected_traffic_for_export = st.selectbox(
+                    "Select Traffic File for Export Context:",
+                    options=traffic_files,
+                    format_func=lambda x: x['file'].split('/')[-1],
+                    key="export_traffic_select"
+                )
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                export_name = st.text_input("Export Filename:", "waf_whitelist.csv", key="export_filename")
+            with col2:
+                include_patterns = st.multiselect(
+                    "Include Pattern Types:",
+                    options=["ip_whitelist", "path_whitelist", "user_agent_whitelist", "parameter_whitelist"],
+                    default=["ip_whitelist", "path_whitelist"],
+                    key="export_patterns"
+                )
+            
+            if st.button("📥 Export CSV", type="primary", key="export_csv"):
+                rules_file_id = selected_rules_for_export['id']
+                traffic_file_id = selected_traffic_for_export['id'] # Pass traffic_file_id for context if needed by backend
+
+                if include_patterns:
+                    with st.spinner("Generating CSV export..."):
+                        response = export_whitelist_csv_api(rules_file_id, export_name, include_patterns, traffic_file_id)
+                        
+                        if response and response.status_code == 200:
+                            result = response.json()
+                            st.success(f"✅ {result['message']}")
+                            
+                            # Display export results
+                            data = result['data']
+                            col1, col2, col3, col4 = st.columns(4)
+                            with col1:
+                                st.metric("Export ID", data['export_id'])
+                            with col2:
+                                st.metric("Total Patterns", data['total_patterns'])
+                            with col3:
+                                st.metric("File Size", f"{data['file_size_bytes']} bytes")
+                            with col4:
+                                st.metric("Status", "Completed")
+                            
+                            # Provide download link
+                            st.info(f"📁 File saved as: {data['file_name']}")
+                            st.markdown(f"**Download URL:** `{data['download_url']}`")
+                        else:
+                            st.error("❌ CSV export failed")
+                else:
+                    st.warning("Please select at least one pattern type to export.")
+        else:
+            st.warning("Please upload both Rules and Traffic files to export whitelists.")
+    else:
+        st.error("No uploaded files found in session.")
 
 @api_view(['GET'])
 def get_false_positive_dashboard(request):
@@ -483,7 +575,6 @@ def get_false_positive_dashboard(request):
         })
     except Exception as e:
         return Response({'error': str(e)}, status=400)
-
 
 # Helper functions
 def analyze_rule_match(rule, traffic_row):

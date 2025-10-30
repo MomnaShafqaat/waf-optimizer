@@ -4,296 +4,6 @@ import pandas as pd
 import plotly.express as px
 from utils import *
 
-def apply_custom_styles():
-    """Apply modern dark theme CSS styles based on MindLink design system"""
-    st.markdown("""
-    <style>
-        /* Global Dark Theme */
-        body {
-            font-family: 'Inter', sans-serif; /* Using a modern font */
-        }
-        .main { 
-            background-color: #1a1a1a; 
-            color: #ffffff;
-        }
-        
-        /* Sidebar Styling */
-        .css-1d391kg, .css-vk32pt { /* Targets for sidebar container */
-            background-color: #1a1a1a !important;
-            padding: 16px !important;
-        }
-        .css-r698ls { /* Streamlit sidebar top padding */
-            padding-top: 0 !important;
-        }
-
-        /* Typography */
-        h1 { 
-            color: #ffffff; 
-            font-size: 32px; /* From MindLink greeting */
-            font-weight: 700;
-            line-height: 1.2;
-            margin-bottom: 8px; /* Adjusted spacing */
-        }
-        
-        h2 { 
-            color: #ffffff; 
-            font-size: 24px; /* From MindLink greeting subtext */
-            font-weight: 600;
-            margin-bottom: 24px; /* More spacing for sections */
-            background: linear-gradient(135deg, #7c3aed, #8b5cf6); /* Gradient for section titles */
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            display: inline-block; /* To make gradient apply only to text */
-        }
-
-        h3 { 
-            color: #ffffff; 
-            font-size: 18px; /* From MindLink phase header */
-            font-weight: 500;
-            margin-bottom: 16px; /* Spacing */
-        }
-        
-        /* Streamlit specific text elements */
-        .stMarkdown p, .stText {
-            color: #a3a3a3; /* Secondary text color */
-            font-size: 14px;
-            line-height: 1.5;
-        }
-        .stMarkdown strong {
-            color: #ffffff; /* Primary text for bold */
-        }
-
-        /* Cards with Dark Theme */
-        .card { 
-            background: #242424; /* Secondary background */
-            padding: 28px; /* Larger padding for cards */
-            border-radius: 14px; /* Larger border radius */
-            border: 1px solid #2a2a2a; /* Tertiary background as border */
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4); /* Elevated shadow */
-            margin-bottom: 24px; /* Consistent card spacing */
-        }
-        
-        /* Enhanced Buttons */
-        .stButton button { 
-            background: #7c3aed; /* Primary accent color */
-            color: #ffffff; 
-            border: none; 
-            border-radius: 8px; 
-            padding: 12px 24px; 
-            font-weight: 500;
-            transition: all 0.2s ease;
-            display: flex; /* For icon + text alignment */
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-        }
-        
-        .stButton button:hover { 
-            background: #8b5cf6; /* Lighter accent on hover */
-            transform: translateY(-2px); 
-            box-shadow: 0 6px 20px rgba(139, 92, 246, 0.4); 
-        }
-        
-        /* Secondary Button (e.g., for 'Clear Filters') */
-        .st-btn-secondary button {
-            background: #333333 !important; /* Interactive hover color */
-            color: #ffffff !important;
-            border: 1px solid #404040 !important; /* Interactive active color */
-        }
-        .st-btn-secondary button:hover {
-            background: #404040 !important;
-            box-shadow: none !important;
-            transform: none !important;
-        }
-
-        /* Primary Action Button - Specific styling */
-        .primary-button {
-            background: #7c3aed !important;
-            color: #ffffff !important;
-            border-radius: 8px !important;
-            padding: 12px 24px !important;
-            font-weight: 500 !important;
-        }
-        
-        /* Success Button */
-        .success-button {
-            background: #10b981 !important;
-            color: #000000 !important; /* Black text for success */
-            border-radius: 8px !important;
-            padding: 12px 24px !important;
-            font-weight: 500 !important;
-        }
-        
-        /* Warning Button */
-        .warning-button {
-            background: #f59e0b !important;
-            color: #000000 !important; /* Black text for warning */
-            border-radius: 8px !important;
-            padding: 12px 24px !important;
-            font-weight: 500 !important;
-        }
-        
-        /* Input Fields */
-        .stTextInput > label, .stSelectbox > label, .stMultiSelect > label, .stSlider > label {
-            color: #ffffff; /* Label color */
-            font-size: 14px;
-            margin-bottom: 8px;
-        }
-        .stTextInput > div > div > input, 
-        .stSelectbox > div > div > div, 
-        .stMultiSelect > div > div > div {
-            background-color: #242424 !important; /* Secondary background */
-            color: #ffffff !important;
-            border: 1px solid #404040 !important; /* Interactive border */
-            border-radius: 8px !important;
-            padding: 10px 12px !important;
-        }
-        .stSelectbox div[data-baseweb="select"] > div {
-            background-color: #242424 !important;
-            color: #ffffff !important;
-        }
-        
-        /* Metrics Cards */
-        .metric-card {
-            background: #242424;
-            padding: 20px;
-            border-radius: 12px;
-            border: 1px solid #333333;
-            text-align: center;
-            margin: 8px 0; /* Adjusted margin */
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-        }
-        
-        .metric-value {
-            font-size: 28px; /* Larger value */
-            font-weight: 700;
-            color: #ffffff;
-            margin-bottom: 4px;
-        }
-        
-        .metric-label {
-            font-size: 14px;
-            color: #a3a3a3;
-        }
-        
-        /* Status Indicators */
-        .status-completed { color: #10b981; font-weight: 500; }
-        .status-in-progress { color: #10b981; font-weight: 500; }
-        .status-pending { color: #f59e0b; font-weight: 500; }
-        .status-alert { color: #ef4444; font-weight: 500; }
-        
-        /* Badges */
-        .badge {
-            padding: 4px 12px;
-            border-radius: 6px;
-            font-size: 12px;
-            font-weight: 600;
-            letter-spacing: 0.5px;
-            display: inline-block;
-        }
-        
-        .badge-success { background: #10b981; color: #000000; }
-        .badge-warning { background: #f59e0b; color: #000000; }
-        .badge-info { background: #3b82f6; color: #ffffff; }
-        .badge-purple { background: #7c3aed; color: #ffffff; }
-        
-        /* Pills/Tags - Focus Selector */
-        .pill {
-            padding: 10px 18px;
-            border-radius: 20px;
-            border: 1px solid #404040;
-            font-size: 14px;
-            white-space: nowrap;
-            display: inline-flex; /* Use flex for alignment */
-            align-items: center;
-            margin-right: 10px; /* Space between pills */
-            margin-bottom: 10px; /* For wrapping */
-            background: transparent;
-            color: #ffffff;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-        .pill:hover {
-            border-color: #7c3aed;
-            color: #7c3aed;
-        }
-        .pill-active {
-            background: #10b981;
-            color: #000000;
-            border: none;
-            font-weight: 500;
-        }
-        
-        /* Expander Styling */
-        .streamlit-expanderHeader {
-            background: #242424 !important;
-            color: #ffffff !important;
-            border: 1px solid #333333 !important;
-            border-radius: 8px !important;
-            padding: 12px 16px !important;
-        }
-        
-        .streamlit-expanderContent {
-            background: #1e1e1e !important; /* Tertiary bg for content */
-            color: #ffffff !important;
-            border: 1px solid #333333 !important;
-            border-top: none !important;
-            border-radius: 0 0 8px 8px !important;
-            padding: 16px !important;
-        }
-        
-        /* Progress Bars */
-        .stProgress > div > div > div {
-            background: #7c3aed !important;
-        }
-        
-        /* Data Tables */
-        .stDataFrame {
-            background: #242424 !important;
-            border: 1px solid #333333 !important;
-            border-radius: 8px !important;
-        }
-        
-        /* Alerts */
-        .stAlert {
-            border-radius: 8px !important;
-            border: 1px solid #333333 !important;
-            background-color: rgba(36, 36, 36, 0.7) !important; /* Semi-transparent secondary */
-        }
-        
-        .stSuccess {
-            background-color: rgba(16, 185, 129, 0.15) !important;
-            border-color: #10b981 !important;
-            color: #10b981 !important;
-        }
-        
-        .stError {
-            background-color: rgba(239, 68, 68, 0.15) !important;
-            border-color: #ef4444 !important;
-            color: #ef4444 !important;
-        }
-        
-        .stWarning {
-            background-color: rgba(245, 158, 11, 0.15) !important;
-            border-color: #f59e0b !important;
-            color: #f59e0b !important;
-        }
-        
-        .stInfo {
-            background-color: rgba(59, 130, 246, 0.15) !important;
-            border-color: #3b82f6 !important;
-            color: #3b82f6 !important;
-        }
-        
-        /* Custom spacing - now more granular */
-        .section-spacing { margin: 32px 0; } /* 4xl */
-        .card-spacing { margin: 24px 0; } /* 2xl */
-        .element-spacing { margin: 16px 0; } /* lg */
-        .compact-spacing { margin: 12px 0; } /* md */
-
-    </style>
-    """, unsafe_allow_html=True)
-
 def render_header():
     """Render the main header with enhanced dark theme based on MindLink design"""
     st.markdown("""
@@ -526,381 +236,310 @@ def render_rule_analysis():
 # import plotly.express as px
 # from utils import *
 
-# def apply_custom_styles():
-#     """Apply modern dark theme CSS styles based on MindLink design system"""
-#     st.markdown("""
-#     <style>
-#         /* Global Dark Theme */
-#         .main { 
-#             background-color: #1a1a1a; 
-#             color: #ffffff;
-#         }
+def apply_custom_styles():
+    """Apply modern dark theme CSS styles based on MindLink design system"""
+    st.markdown("""
+    <style>
+        /* Global Dark Theme */
+        .main { 
+            background-color: #1a1a1a; 
+            color: #ffffff;
+        }
         
-#         /* Typography */
-#         h1 { 
-#             color: #ffffff; 
-#             font-size: 28px;
-#             font-weight: 600;
-#             line-height: 1.2;
-#             margin-bottom: 4px;
-#         }
+        /* Typography */
+        h1 { 
+            color: #ffffff; 
+            font-size: 28px;
+            font-weight: 600;
+            line-height: 1.2;
+            margin-bottom: 4px;
+        }
         
-#         h2 { 
-#             color: #ffffff; 
-#             font-size: 20px;
-#             font-weight: 500;
-#             margin-bottom: 16px;
-#         }
+        h2 { 
+            color: #ffffff; 
+            font-size: 20px;
+            font-weight: 500;
+            margin-bottom: 16px;
+        }
         
-#         h3 { 
-#             color: #ffffff; 
-#             font-size: 16px;
-#             font-weight: 500;
-#             margin-bottom: 12px;
-#         }
+        h3 { 
+            color: #ffffff; 
+            font-size: 16px;
+            font-weight: 500;
+            margin-bottom: 12px;
+        }
         
-#         /* Cards with Dark Theme */
-#         .card { 
-#             background: #242424; 
-#             padding: 24px; 
-#             border-radius: 12px; 
-#             border: 1px solid #333333; 
-#             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3); 
-#             margin: 16px 0; 
-#         }
+        /* Cards with Dark Theme */
+        .card { 
+            background: #242424; 
+            padding: 24px; 
+            border-radius: 12px; 
+            border: 1px solid #333333; 
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3); 
+            margin: 16px 0; 
+        }
         
-#         /* Enhanced Buttons */
-#         .stButton button { 
-#             background: linear-gradient(135deg, #7c3aed, #8b5cf6); 
-#             color: #ffffff; 
-#             border: none; 
-#             border-radius: 8px; 
-#             padding: 12px 24px; 
-#             font-weight: 500;
-#             transition: all 0.2s ease;
-#         }
+        /* Enhanced Buttons */
+        .stButton button { 
+            background: linear-gradient(135deg, #7c3aed, #8b5cf6); 
+            color: #ffffff; 
+            border: none; 
+            border-radius: 8px; 
+            padding: 12px 24px; 
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
         
-#         .stButton button:hover { 
-#             transform: translateY(-2px); 
-#             box-shadow: 0 4px 16px rgba(124, 58, 237, 0.4); 
-#         }
+        .stButton button:hover { 
+            transform: translateY(-2px); 
+            box-shadow: 0 4px 16px rgba(124, 58, 237, 0.4); 
+        }
         
-#         /* Primary Action Button */
-#         .primary-button {
-#             background: #7c3aed !important;
-#             color: #ffffff !important;
-#             border-radius: 8px !important;
-#             padding: 12px 24px !important;
-#             font-weight: 500 !important;
-#         }
+        /* Primary Action Button */
+        .primary-button {
+            background: #7c3aed !important;
+            color: #ffffff !important;
+            border-radius: 8px !important;
+            padding: 12px 24px !important;
+            font-weight: 500 !important;
+        }
         
-#         /* Success Button */
-#         .success-button {
-#             background: #10b981 !important;
-#             color: #000000 !important;
-#             border-radius: 8px !important;
-#             padding: 12px 24px !important;
-#             font-weight: 500 !important;
-#         }
+        /* Success Button */
+        .success-button {
+            background: #10b981 !important;
+            color: #000000 !important;
+            border-radius: 8px !important;
+            padding: 12px 24px !important;
+            font-weight: 500 !important;
+        }
         
-#         /* Warning Button */
-#         .warning-button {
-#             background: #f59e0b !important;
-#             color: #000000 !important;
-#             border-radius: 8px !important;
-#             padding: 12px 24px !important;
-#             font-weight: 500 !important;
-#         }
+        /* Warning Button */
+        .warning-button {
+            background: #f59e0b !important;
+            color: #000000 !important;
+            border-radius: 8px !important;
+            padding: 12px 24px !important;
+            font-weight: 500 !important;
+        }
         
-#         /* Input Fields */
-#         .stTextInput > div > div > input {
-#             background-color: #242424 !important;
-#             color: #ffffff !important;
-#             border: 1px solid #404040 !important;
-#             border-radius: 8px !important;
-#             padding: 10px 12px !important;
-#         }
+        /* Input Fields */
+        .stTextInput > div > div > input {
+            background-color: #242424 !important;
+            color: #ffffff !important;
+            border: 1px solid #404040 !important;
+            border-radius: 8px !important;
+            padding: 10px 12px !important;
+        }
         
-#         .stSelectbox > div > div > div {
-#             background-color: #242424 !important;
-#             color: #ffffff !important;
-#             border: 1px solid #404040 !important;
-#             border-radius: 8px !important;
-#         }
+        .stSelectbox > div > div > div {
+            background-color: #242424 !important;
+            color: #ffffff !important;
+            border: 1px solid #404040 !important;
+            border-radius: 8px !important;
+        }
         
-#         /* Metrics Cards */
-#         .metric-card {
-#             background: #242424;
-#             padding: 20px;
-#             border-radius: 12px;
-#             border: 1px solid #333333;
-#             text-align: center;
-#             margin: 8px;
-#         }
+        /* Metrics Cards */
+        .metric-card {
+            background: #242424;
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid #333333;
+            text-align: center;
+            margin: 8px;
+        }
         
-#         .metric-value {
-#             font-size: 24px;
-#             font-weight: 600;
-#             color: #ffffff;
-#             margin-bottom: 4px;
-#         }
+        .metric-value {
+            font-size: 24px;
+            font-weight: 600;
+            color: #ffffff;
+            margin-bottom: 4px;
+        }
         
-#         .metric-label {
-#             font-size: 14px;
-#             color: #a3a3a3;
-#         }
+        .metric-label {
+            font-size: 14px;
+            color: #a3a3a3;
+        }
         
-#         /* Status Indicators */
-#         .status-completed {
-#             color: #10b981;
-#             font-weight: 500;
-#         }
+        /* Status Indicators */
+        .status-completed {
+            color: #10b981;
+            font-weight: 500;
+        }
         
-#         .status-in-progress {
-#             color: #10b981;
-#             font-weight: 500;
-#         }
+        .status-in-progress {
+            color: #10b981;
+            font-weight: 500;
+        }
         
-#         .status-pending {
-#             color: #f59e0b;
-#             font-weight: 500;
-#         }
+        .status-pending {
+            color: #f59e0b;
+            font-weight: 500;
+        }
         
-#         .status-alert {
-#             color: #ef4444;
-#             font-weight: 500;
-#         }
+        .status-alert {
+            color: #ef4444;
+            font-weight: 500;
+        }
         
-#         /* Badges */
-#         .badge {
-#             padding: 4px 12px;
-#             border-radius: 6px;
-#             font-size: 12px;
-#             font-weight: 600;
-#             letter-spacing: 0.5px;
-#             display: inline-block;
-#         }
+        /* Badges */
+        .badge {
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            display: inline-block;
+        }
         
-#         .badge-success {
-#             background: #10b981;
-#             color: #000000;
-#         }
+        .badge-success {
+            background: #10b981;
+            color: #000000;
+        }
         
-#         .badge-warning {
-#             background: #f59e0b;
-#             color: #000000;
-#         }
+        .badge-warning {
+            background: #f59e0b;
+            color: #000000;
+        }
         
-#         .badge-info {
-#             background: #3b82f6;
-#             color: #ffffff;
-#         }
+        .badge-info {
+            background: #3b82f6;
+            color: #ffffff;
+        }
         
-#         .badge-purple {
-#             background: #7c3aed;
-#             color: #ffffff;
-#         }
+        .badge-purple {
+            background: #7c3aed;
+            color: #ffffff;
+        }
         
-#         /* Pills/Tags */
-#         .pill {
-#             padding: 10px 18px;
-#             border-radius: 20px;
-#             border: 1px solid #404040;
-#             font-size: 14px;
-#             white-space: nowrap;
-#             display: inline-block;
-#             margin: 4px;
-#             background: transparent;
-#             color: #ffffff;
-#         }
+        /* Pills/Tags */
+        .pill {
+            padding: 10px 18px;
+            border-radius: 20px;
+            border: 1px solid #404040;
+            font-size: 14px;
+            white-space: nowrap;
+            display: inline-block;
+            margin: 4px;
+            background: transparent;
+            color: #ffffff;
+        }
         
-#         .pill-active {
-#             background: #10b981;
-#             color: #000000;
-#             border: none;
-#         }
+        .pill-active {
+            background: #10b981;
+            color: #000000;
+            border: none;
+        }
         
-#         /* Expander Styling */
-#         .streamlit-expanderHeader {
-#             background: #242424 !important;
-#             color: #ffffff !important;
-#             border: 1px solid #333333 !important;
-#             border-radius: 8px !important;
-#         }
+        /* Expander Styling */
+        .streamlit-expanderHeader {
+            background: #242424 !important;
+            color: #ffffff !important;
+            border: 1px solid #333333 !important;
+            border-radius: 8px !important;
+        }
         
-#         .streamlit-expanderContent {
-#             background: #1e1e1e !important;
-#             color: #ffffff !important;
-#             border: 1px solid #333333 !important;
-#             border-top: none !important;
-#             border-radius: 0 0 8px 8px !important;
-#         }
+        .streamlit-expanderContent {
+            background: #1e1e1e !important;
+            color: #ffffff !important;
+            border: 1px solid #333333 !important;
+            border-top: none !important;
+            border-radius: 0 0 8px 8px !important;
+        }
         
-#         /* Progress Bars */
-#         .stProgress > div > div > div {
-#             background: #7c3aed !important;
-#         }
+        /* Progress Bars */
+        .stProgress > div > div > div {
+            background: #7c3aed !important;
+        }
         
-#         /* Sidebar */
-#         .css-1d391kg {
-#             background-color: #1a1a1a !important;
-#         }
+        /* Sidebar */
+        .css-1d391kg {
+            background-color: #1a1a1a !important;
+        }
         
-#         /* Data Tables */
-#         .stDataFrame {
-#             background: #242424 !important;
-#             border: 1px solid #333333 !important;
-#             border-radius: 8px !important;
-#         }
+        /* Data Tables */
+        .stDataFrame {
+            background: #242424 !important;
+            border: 1px solid #333333 !important;
+            border-radius: 8px !important;
+        }
         
-#         /* Alerts */
-#         .stAlert {
-#             border-radius: 8px !important;
-#             border: 1px solid #333333 !important;
-#         }
+        /* Alerts */
+        .stAlert {
+            border-radius: 8px !important;
+            border: 1px solid #333333 !important;
+        }
         
-#         .stSuccess {
-#             background: rgba(16, 185, 129, 0.1) !important;
-#             border-color: #10b981 !important;
-#             color: #10b981 !important;
-#         }
+        .stSuccess {
+            background: rgba(16, 185, 129, 0.1) !important;
+            border-color: #10b981 !important;
+            color: #10b981 !important;
+        }
         
-#         .stError {
-#             background: rgba(239, 68, 68, 0.1) !important;
-#             border-color: #ef4444 !important;
-#             color: #ef4444 !important;
-#         }
+        .stError {
+            background: rgba(239, 68, 68, 0.1) !important;
+            border-color: #ef4444 !important;
+            color: #ef4444 !important;
+        }
         
-#         .stWarning {
-#             background: rgba(245, 158, 11, 0.1) !important;
-#             border-color: #f59e0b !important;
-#             color: #f59e0b !important;
-#         }
+        .stWarning {
+            background: rgba(245, 158, 11, 0.1) !important;
+            border-color: #f59e0b !important;
+            color: #f59e0b !important;
+        }
         
-#         .stInfo {
-#             background: rgba(59, 130, 246, 0.1) !important;
-#             border-color: #3b82f6 !important;
-#             color: #3b82f6 !important;
-#         }
+        .stInfo {
+            background: rgba(59, 130, 246, 0.1) !important;
+            border-color: #3b82f6 !important;
+            color: #3b82f6 !important;
+        }
         
-#         /* Custom spacing */
-#         .section-spacing {
-#             margin: 24px 0;
-#         }
+        /* Custom spacing */
+        .section-spacing {
+            margin: 24px 0;
+        }
         
-#         .card-spacing {
-#             margin: 16px 0;
-#         }
+        .card-spacing {
+            margin: 16px 0;
+        }
         
-#         .element-spacing {
-#             margin: 12px 0;
-#         }
+        .element-spacing {
+            margin: 12px 0;
+        }
         
-#         .compact-spacing {
-#             margin: 8px 0;
-#         }
-#     </style>
-#     """, unsafe_allow_html=True)
+        .compact-spacing {
+            margin: 8px 0;
+        }
+    </style>
+    """, unsafe_allow_html=True)
 
-# def render_header():
-#     """Render the main header with enhanced dark theme"""
-#     st.markdown("""
-#     <div style="background: linear-gradient(135deg, #1a1a1a, #242424); padding: 32px 0; margin-bottom: 32px; border-radius: 0 0 16px 16px;">
-#         <div style="max-width: 1200px; margin: 0 auto; padding: 0 32px;">
-#             <div style="display: flex; justify-content: space-between; align-items: center;">
-#                 <div>
-#                     <h1 style="margin: 0; font-size: 32px; font-weight: 700; background: linear-gradient(135deg, #7c3aed, #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
-#                         🛡️ WAF Optimizer Pro
-#                     </h1>
-#                     <p style="margin: 8px 0 0 0; color: #a3a3a3; font-size: 16px;">
-#                         Intelligent Web Application Firewall Optimization Platform
-#                     </p>
-#                 </div>
-#                 <div style="display: flex; gap: 16px; align-items: center;">
-#                     <div style="background: #242424; padding: 12px 20px; border-radius: 12px; border: 1px solid #333333;">
-#                         <div style="color: #10b981; font-size: 14px; font-weight: 500;">🚀 Performance</div>
-#                         <div style="color: #ffffff; font-size: 18px; font-weight: 600;">Enhanced</div>
-#                     </div>
-#                     <div style="background: #242424; padding: 12px 20px; border-radius: 12px; border: 1px solid #333333;">
-#                         <div style="color: #3b82f6; font-size: 14px; font-weight: 500;">🎯 Security</div>
-#                         <div style="color: #ffffff; font-size: 18px; font-weight: 600;">Optimized</div>
-#                     </div>
-#                 </div>
-#             </div>
-#         </div>
-#     </div>
-#     """, unsafe_allow_html=True)
-
-# def render_file_management():
-#     """Render file management section"""
-#     st.markdown('<div class="card">', unsafe_allow_html=True)
-#     st.header("📁 Configuration Management")
-
-#     col1, col2 = st.columns(2)
-#     with col1:
-#         st.subheader("WAF Rules")
-#         st.info("""
-#         **Required fields:** id, category, parameter, operator, value, phase, action, priority
-#         """)
-#         rules_file = st.file_uploader("Upload rules CSV", type=['csv'], key="rules_upload")
-#     with col2:
-#         st.subheader("Traffic Data") 
-#         st.info("""
-#         **Required fields:** timestamp, src_ip, method, url
-#         """)
-#         traffic_file = st.file_uploader("Upload traffic CSV", type=['csv'], key="traffic_upload")
-
-#     if rules_file or traffic_file:
-#         if st.button("📤 Upload Files", type="primary"):
-#             upload_success = True
-#             uploaded_files = []
-            
-#             # Upload rules file if provided
-#             if rules_file:
-#                 with st.spinner(f"Uploading {rules_file.name}..."):
-#                     # Validate file structure
-#                     is_valid, message = validate_csv_structure(rules_file, 'rules')
-#                     if not is_valid:
-#                         st.error(f"❌ Rules file validation failed: {message}")
-#                         upload_success = False
-#                     else:
-#                         # Upload the file
-#                         response = upload_file(rules_file, 'rules')
-#                         if response and response.status_code in [200, 201]:
-#                             st.success(f"✅ Successfully uploaded {rules_file.name}")
-#                             uploaded_files.append(f"{rules_file.name} (Rules)")
-#                         else:
-#                             st.error(f"❌ Failed to upload {rules_file.name}")
-#                             upload_success = False
-            
-#             # Upload traffic file if provided
-#             if traffic_file:
-#                 with st.spinner(f"Uploading {traffic_file.name}..."):
-#                     # Validate file structure
-#                     is_valid, message = validate_csv_structure(traffic_file, 'traffic')
-#                     if not is_valid:
-#                         st.error(f"❌ Traffic file validation failed: {message}")
-#                         upload_success = False
-#                     else:
-#                         # Upload the file
-#                         response = upload_file(traffic_file, 'traffic')
-#                         if response and response.status_code in [200, 201]:
-#                             st.success(f"✅ Successfully uploaded {traffic_file.name}")
-#                             uploaded_files.append(f"{traffic_file.name} (Traffic)")
-#                         else:
-#                             st.error(f"❌ Failed to upload {traffic_file.name}")
-#                             upload_success = False
-            
-#             # Show overall result
-#             if upload_success and uploaded_files:
-#                 st.success(f"🎉 All files uploaded successfully: {', '.join(uploaded_files)}")
-#                 # Refresh the files data
-#                 st.session_state.files_data = get_files_data()
-#                 st.rerun()
-#             elif not upload_success:
-#                 st.error("❌ Some files failed to upload. Please check the errors above.")
-    
-#     st.markdown('</div>', unsafe_allow_html=True)
+def render_header():
+    """Render the main header with enhanced dark theme"""
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #1a1a1a, #242424); padding: 32px 0; margin-bottom: 32px; border-radius: 0 0 16px 16px;">
+        <div style="max-width: 1200px; margin: 0 auto; padding: 0 32px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h1 style="margin: 0; font-size: 32px; font-weight: 700; background: linear-gradient(135deg, #7c3aed, #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+                        🛡️ WAF Optimizer Pro
+                    </h1>
+                    <p style="margin: 8px 0 0 0; color: #a3a3a3; font-size: 16px;">
+                        Intelligent Web Application Firewall Optimization Platform
+                    </p>
+                </div>
+                <div style="display: flex; gap: 16px; align-items: center;">
+                    <div style="background: #242424; padding: 12px 20px; border-radius: 12px; border: 1px solid #333333;">
+                        <div style="color: #10b981; font-size: 14px; font-weight: 500;">🚀 Performance</div>
+                        <div style="color: #ffffff; font-size: 18px; font-weight: 600;">Enhanced</div>
+                    </div>
+                    <div style="background: #242424; padding: 12px 20px; border-radius: 12px; border: 1px solid #333333;">
+                        <div style="color: #3b82f6; font-size: 14px; font-weight: 500;">🎯 Security</div>
+                        <div style="color: #ffffff; font-size: 18px; font-weight: 600;">Optimized</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
 def display_analysis_results(results):
     """Display rule analysis results with enhanced design"""
@@ -1258,13 +897,13 @@ def render_false_positive_management():
     # Enhanced header with gradient
     st.markdown("""
     <div style="background: linear-gradient(135deg, #7c3aed, #8b5cf6); padding: 20px; border-radius: 12px; margin-bottom: 24px;">
-        <h2 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 600;">🎯 False Positive Reduction</h2>
+        <h2 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 600;"> False Positive Reduction</h2>
         <p style="color: rgba(255, 255, 255, 0.8); margin: 8px 0 0 0; font-size: 16px;">Detect and reduce false positives to improve WAF accuracy</p>
     </div>
     """, unsafe_allow_html=True)
     
     # Tab layout for different FR04 features
-    tab1, tab2, tab3, tab4 = st.tabs(["🔍 Detection", "🧠 Learning Mode", "📝 Suggestions", "📤 Export"])
+    tab1, tab2, tab3, tab4 = st.tabs([" Detection", " Learning Mode", " Suggestions", " Export"])
     
     with tab1:
         render_false_positive_detection()
@@ -1279,100 +918,123 @@ def render_false_positive_management():
         render_whitelist_export()
     
     st.markdown('</div>', unsafe_allow_html=True)
-
 def render_false_positive_detection():
-    """FR04-01: False Positive Detection with enhanced design"""
+    """FR04-01: False Positive Detection (same selection style as Rule Analysis)"""
     st.markdown("""
     <div style="background: #242424; padding: 20px; border-radius: 12px; border: 1px solid #333333; margin-bottom: 24px;">
         <h3 style="color: #ffffff; margin: 0 0 16px 0; font-size: 18px; font-weight: 600;">🔍 False Positive Detection</h3>
-        <p style="color: #a3a3a3; margin: 0; font-size: 14px;">Analyze traffic patterns to identify rules blocking legitimate requests</p>
+        <p style="color: #a3a3a3; margin: 0; font-size: 14px;">
+            Analyze uploaded rules and traffic logs to detect false positives.
+        </p>
     </div>
     """, unsafe_allow_html=True)
-    
+
+    # Ensure uploaded files exist in Streamlit state
     if st.session_state.files_data:
         files_data = st.session_state.files_data
-        sessions = [f for f in files_data if f['file_type'] in ['rules', 'traffic']]
-        
-        if sessions:
-            # Configuration section
-            st.markdown("### Configuration")
+        rules_files = [f for f in files_data if f['file_type'] == 'rules']
+        traffic_files = [f for f in files_data if f['file_type'] == 'traffic']
+
+        if rules_files and traffic_files:
+            # --- Step 1: Select Files (same layout as Rule Analysis) ---
+            st.markdown("### File Selection")
             col1, col2 = st.columns(2)
             with col1:
-                session_options = [{"id": 1, "name": "Analysis Session 1"}]
-                selected_session = st.selectbox(
-                    "Select Analysis Session:",
-                    options=session_options,
-                    format_func=lambda x: x['name'],
-                    key="fp_session_select"
+                selected_rules = st.selectbox(
+                    "Select Rules File:",
+                    options=rules_files,
+                    format_func=lambda x: x['file'].split('/')[-1],
+                    key="fp_rules_select"
                 )
             with col2:
+                selected_traffic = st.selectbox(
+                    "Select Traffic File:",
+                    options=traffic_files,
+                    format_func=lambda x: x['file'].split('/')[-1],
+                    key="fp_traffic_select"
+                )
+
+            # --- Step 2: Detection Settings ---
+            st.markdown("### Detection Settings")
+            col1, col2 = st.columns(2)
+            with col1:
                 detection_method = st.selectbox(
                     "Detection Method:",
                     options=["manual", "learning", "ai"],
-                    format_func=lambda x: x.title(),
-                    key="detection_method"
+                    index=0,
+                    key="fp_detection_method"
                 )
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                threshold = st.slider("False Positive Threshold:", 0.05, 0.5, 0.1, 0.05)
             with col2:
-                st.markdown("""
-                <div style="background: #242424; padding: 16px; border-radius: 8px; border: 1px solid #333333;">
-                    <div style="color: #10b981; font-size: 14px; font-weight: 500;">Current Threshold</div>
-                    <div style="color: #ffffff; font-size: 20px; font-weight: 600;">{:.1%}</div>
-                </div>
-                """.format(threshold), unsafe_allow_html=True)
-            
-            # Detection button with enhanced styling
+                threshold = st.slider("False Positive Threshold:", 0.05, 0.5, 0.1, 0.05)
+
+            # --- Step 3: Run Detection ---
             col1, col2, col3 = st.columns([1, 2, 1])
             with col2:
-                if st.button("🔍 Detect False Positives", type="primary", key="detect_fp", use_container_width=True):
-                    if selected_session:
-                        with st.spinner("Analyzing traffic patterns for false positives..."):
-                            response = detect_false_positives_api(selected_session['id'], detection_method, threshold)
-                            
-                            if response and response.status_code == 200:
-                                result = response.json()
-                                st.success(f"✅ {result['message']}")
-                                
-                                # Enhanced results display
-                                data = result['data']
-                                metrics_data = [
-                                    {"label": "Rules Analyzed", "value": data['total_rules_analyzed']},
-                                    {"label": "High FP Rules", "value": data['high_false_positive_rules']},
-                                    {"label": "Detection Method", "value": data['detection_method'].title()},
-                                    {"label": "Threshold Used", "value": f"{data['threshold_used']:.1%}"}
-                                ]
-                                display_enhanced_metrics(metrics_data)
-                                
-                                # Show detected false positives with enhanced design
-                                false_positives = data.get('false_positives_detected', [])
-                                if false_positives:
-                                    st.markdown("### 🚨 Detected False Positives")
-                                    for fp in false_positives:
-                                        status_color = "#ef4444" if fp['false_positive_rate'] > 0.2 else "#f59e0b"
-                                        st.markdown(f"""
-                                        <div style="background: #242424; padding: 16px; border-radius: 8px; border: 1px solid #333333; margin: 8px 0;">
-                                            <div style="display: flex; justify-content: space-between; align-items: center;">
-                                                <div>
-                                                    <div style="color: #ffffff; font-size: 16px; font-weight: 600;">Rule {fp['rule_id']}</div>
-                                                    <div style="color: #a3a3a3; font-size: 14px;">False Positive Rate: <span style="color: {status_color}; font-weight: 600;">{fp['false_positive_rate']:.1%}</span></div>
+                if st.button("🚦 Run False Positive Detection", type="primary", use_container_width=True):
+                    # ✅ FIX: ensure we pass a valid session_id from backend
+                    # In your upload API, when files are uploaded, each has a session_id linked to RuleAnalysisSession
+                    # We pick that same session ID here.
+                    session_id = selected_rules.get('session_id') or selected_rules.get('id')
+                    
+                    if not session_id:
+                        st.error("⚠️ No valid session ID found. Please re-upload or refresh.")
+                        return
+
+                    with st.spinner("Detecting false positives..."):
+                        response = detect_false_positives_api(session_id, detection_method, threshold)
+
+                        if response and response.status_code == 200:
+                            result = response.json()
+                            data = result.get("data", {})
+
+                            st.success(f"✅ {result.get('message', 'Detection completed successfully.')}")
+                            st.write("---")
+
+                            # --- Display Key Metrics ---
+                            metrics = [
+                                {"label": "Rules Analyzed", "value": data.get('total_rules_analyzed', 0)},
+                                {"label": "High FP Rules", "value": data.get('high_false_positive_rules', 0)},
+                                {"label": "Method", "value": data.get('detection_method', '').title()},
+                                {"label": "Threshold", "value": f"{data.get('threshold_used', 0):.1%}"}
+                            ]
+                            display_enhanced_metrics(metrics)
+
+                            # --- Display Detected False Positives ---
+                            fps = data.get('false_positives_detected', [])
+                            if fps:
+                                st.markdown("### 🚨 Detected False Positives")
+                                for fp in fps:
+                                    rate_color = "#ef4444" if fp['false_positive_rate'] > 0.2 else "#f59e0b"
+                                    st.markdown(f"""
+                                    <div style="background: #242424; padding: 16px; border-radius: 8px;
+                                                border: 1px solid #333333; margin: 8px 0;">
+                                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                                            <div>
+                                                <div style="color: #fff; font-size: 16px; font-weight: 600;">
+                                                    Rule {fp['rule_id']}
                                                 </div>
-                                                <div style="background: {status_color}; color: #ffffff; padding: 4px 12px; border-radius: 6px; font-size: 12px; font-weight: 500;">
-                                                    {fp['status'].title()}
+                                                <div style="color: #a3a3a3; font-size: 14px;">
+                                                    False Positive Rate:
+                                                    <span style="color: {rate_color}; font-weight: 600;">
+                                                        {fp['false_positive_rate']:.1%}
+                                                    </span>
                                                 </div>
                                             </div>
+                                            <div style="background: {rate_color}; color: #fff; padding: 4px 12px;
+                                                        border-radius: 6px; font-size: 12px; font-weight: 500;">
+                                                {fp['status'].title()}
+                                            </div>
                                         </div>
-                                        """, unsafe_allow_html=True)
+                                    </div>
+                                    """, unsafe_allow_html=True)
                             else:
-                                st.error("❌ False positive detection failed")
-                    else:
-                        st.warning("Please select an analysis session")
+                                st.info("✅ No significant false positives detected.")
+                        else:
+                            st.error(f"❌ Detection failed. ({response.text if response else 'No response'})")
         else:
-            st.warning("No analysis sessions available")
+            st.warning("⚠️ Please upload both Rules and Traffic files first.")
     else:
-        st.error("No files available for analysis")
+        st.error("🚫 No uploaded files found in session.")
 
 def render_learning_mode():
     """FR04-03: Learning Mode"""
