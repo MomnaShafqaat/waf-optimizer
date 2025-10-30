@@ -11,8 +11,8 @@ class RuleAnalysisSession(models.Model):
     ]
     
     name = models.CharField(max_length=255)
-    rules_file = models.ForeignKey(UploadedFile, on_delete=models.CASCADE, related_name='rules_analyses')
-    traffic_file = models.ForeignKey(UploadedFile, on_delete=models.CASCADE, related_name='traffic_analyses')
+    rules_file = models.ForeignKey(UploadedFile, on_delete=models.CASCADE, null=True, blank=True, related_name='rules_analyses')
+    traffic_file = models.ForeignKey(UploadedFile, on_delete=models.CASCADE,  null=True, blank=True, related_name='traffic_analyses')
     analysis_types = models.JSONField()  # List of analysis types to perform
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

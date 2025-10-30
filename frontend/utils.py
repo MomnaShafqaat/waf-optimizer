@@ -34,17 +34,24 @@ def get_files_data():
     except:
         return []
 
-def analyze_rules(rules_file_id, traffic_file_id, analysis_types):
-    """Run rule analysis"""
-    analysis_data = {
-        'rules_file_id': rules_file_id,
-        'traffic_file_id': traffic_file_id,
-        'analysis_types': [atype[:3].upper() for atype in analysis_types]
-    }
-    
+def analyze_rules(rules_content, logs_content, analysis_types):
+    """Run rule analysis with file content as strings"""
     try:
+        # Convert bytes to string if needed
+        if isinstance(rules_content, bytes):
+            rules_content = rules_content.decode('utf-8')
+        if isinstance(logs_content, bytes):
+            logs_content = logs_content.decode('utf-8')
+        
+        analysis_data = {
+            'rules_content': rules_content,
+            'logs_content': logs_content,
+            'analysis_types': [atype[:3].upper() for atype in analysis_types]
+        }
+        
         response = requests.post(RULE_ANALYSIS_API_URL, json=analysis_data, timeout=30)
         return response
+        
     except Exception as e:
         st.error(f"Analysis error: {str(e)}")
         return None
@@ -88,12 +95,17 @@ def get_performance_dashboard():
         return None
 
 def upload_file(file, file_type):
-    """Upload a file to the backend"""
+    """Upload a file to the Django backend (which uploads to Supabase)"""
     try:
-        files = {'file': file}
+        files = {'file': (file.name, file, "text/csv")}
         data = {'file_type': file_type}
         response = requests.post(API_URL, files=files, data=data)
-        return response
+        
+        if response.status_code in [200, 201]:
+            return response.json()  # returns dict with 'filename', 'supabase_path', etc.
+        else:
+            st.error(f"Upload failed: {response.status_code} {response.text}")
+            return None
     except Exception as e:
         st.error(f"Upload error: {str(e)}")
         return None

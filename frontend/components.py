@@ -3,6 +3,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from utils import *
+from fetch_files import get_rules_files_from_supabase, get_traffic_files_from_supabase , download_file_from_supabase
 
 def apply_custom_styles():
     """Apply modern dark theme CSS styles based on MindLink design system"""
@@ -403,17 +404,17 @@ def render_main_dashboard():
 def render_file_management():
     """Render file management section"""
     st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.markdown("<h2>📁 Configuration Management</h2>", unsafe_allow_html=True) # Enhanced H2
+    st.markdown("<h2>📁 Configuration Management</h2>", unsafe_allow_html=True)
 
     col1, col2 = st.columns(2)
     with col1:
-        st.markdown("<h3>WAF Rules</h3>", unsafe_allow_html=True) # Enhanced H3
+        st.markdown("<h3>WAF Rules</h3>", unsafe_allow_html=True)
         st.info("""
         **Required fields:** id, category, parameter, operator, value, phase, action, priority
         """)
         rules_file = st.file_uploader("Upload rules CSV", type=['csv'], key="rules_upload")
     with col2:
-        st.markdown("<h3>Traffic Data</h3>", unsafe_allow_html=True) # Enhanced H3
+        st.markdown("<h3>Traffic Data</h3>", unsafe_allow_html=True)
         st.info("""
         **Required fields:** timestamp, src_ip, method, url
         """)
@@ -435,11 +436,26 @@ def render_file_management():
                     else:
                         # Upload the file
                         response = upload_file(rules_file, 'rules')
-                        if response and response.status_code in [200, 201]:
+                        
+                        # Handle different response types and error cases
+                        if response and isinstance(response, dict) and response.get('id'):
                             st.success(f"✅ Successfully uploaded {rules_file.name}")
                             uploaded_files.append(f"{rules_file.name} (Rules)")
+                        elif response and isinstance(response, dict) and response.get('error'):
+                            # Handle specific error cases - the error is a string containing the actual error dict
+                            error_msg = str(response.get('error', ''))
+                            
+                            # Debug: Show what we're actually getting
+                            st.write("Debug - Raw error:", error_msg)
+                            
+                            # Check for duplicate file error (nested in string)
+                            if any(indicator in error_msg for indicator in ['409', 'Duplicate', 'already exists', 'resource already exists']):
+                                st.warning(f"⚠️ File '{rules_file.name}' already exists in the system. Please use a different filename or delete the existing file first.")
+                            else:
+                                st.error(f"❌ Failed to upload {rules_file.name}: {error_msg}")
+                            upload_success = False
                         else:
-                            st.error(f"❌ Failed to upload {rules_file.name}")
+                            st.error(f"❌ Failed to upload {rules_file.name} - No valid response from server")
                             upload_success = False
             
             # Upload traffic file if provided
@@ -453,11 +469,23 @@ def render_file_management():
                     else:
                         # Upload the file
                         response = upload_file(traffic_file, 'traffic')
-                        if response and response.status_code in [200, 201]:
+                        
+                        # Handle different response types and error cases
+                        if response and isinstance(response, dict) and response.get('id'):
                             st.success(f"✅ Successfully uploaded {traffic_file.name}")
                             uploaded_files.append(f"{traffic_file.name} (Traffic)")
+                        elif response and isinstance(response, dict) and response.get('error'):
+                            # Handle specific error cases - the error is a string containing the actual error dict
+                            error_msg = str(response.get('error', ''))
+                            
+                            # Check for duplicate file error (nested in string)
+                            if any(indicator in error_msg for indicator in ['409', 'Duplicate', 'already exists', 'resource already exists']):
+                                st.warning(f"⚠️ File '{traffic_file.name}' already exists in the system. Please use a different filename or delete the existing file first.")
+                            else:
+                                st.error(f"❌ Failed to upload {traffic_file.name}: {error_msg}")
+                            upload_success = False
                         else:
-                            st.error(f"❌ Failed to upload {traffic_file.name}")
+                            st.error(f"❌ Failed to upload {traffic_file.name} - No valid response from server")
                             upload_success = False
             
             # Show overall result
@@ -472,51 +500,76 @@ def render_file_management():
     st.markdown('</div>', unsafe_allow_html=True)
 
 def render_rule_analysis():
-    """Render rule analysis section"""
+    """Render rule analysis section - fetches files directly from Supabase"""
     st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.markdown("<h2>🔍 Security Analysis</h2>", unsafe_allow_html=True) # Enhanced H2
+    st.markdown("<h2>🔍 Security Analysis</h2>", unsafe_allow_html=True)
 
-    if st.session_state.files_data:
-        files_data = st.session_state.files_data
-        rules_files = [f for f in files_data if f['file_type'] == 'rules']
-        traffic_files = [f for f in files_data if f['file_type'] == 'traffic']
-        
-        if rules_files and traffic_files:
-            col1, col2 = st.columns(2)
-            with col1:
-                selected_rules = st.selectbox("Rules File:", options=rules_files, format_func=lambda x: x['file'].split('/')[-1])
-            with col2:
-                selected_traffic = st.selectbox("Traffic File:", options=traffic_files, format_func=lambda x: x['file'].split('/')[-1])
-            
-            analysis_types = st.multiselect(
-                "Analysis Types:",
-                options=["Shadowing", "Generalization", "Redundancy", "Correlation"],
-                default=["Shadowing", "Redundancy"]
+    # Fetch files directly from Supabase buckets
+    with st.spinner("Loading files from storage..."):
+        rules_files = get_rules_files_from_supabase()
+        logs_files = get_traffic_files_from_supabase()  # This gets logs files from waf-traffic-files bucket
+    
+    # Debug info (optional)
+    st.write(f"Found {len(rules_files)} rules files, {len(logs_files)} logs files")
+    
+    if rules_files and logs_files:
+        col1, col2 = st.columns(2)
+        with col1:
+            selected_rules = st.selectbox(
+                "Rules File:", 
+                options=rules_files, 
+                format_func=lambda x: x['name']
             )
-            
-            # Map full names to abbreviations
-            analysis_map = {
-                "Shadowing": "SHD",
-                "Generalization": "GEN", 
-                "Redundancy": "RXD",
-                "Correlation": "COR"
-            }
-            
-            if st.button("Run Security Analysis", type="primary"):
-                with st.spinner("Analyzing rule relationships..."):
-                    # Convert full names to abbreviations before sending
-                    analysis_types_abbr = [analysis_map[atype] for atype in analysis_types]
-                    response = analyze_rules(selected_rules['id'], selected_traffic['id'], analysis_types_abbr)
+        with col2:
+            selected_logs = st.selectbox(
+                "Logs File:", 
+                options=logs_files, 
+                format_func=lambda x: x['name']
+            )
+        
+        analysis_types = st.multiselect(
+            "Analysis Types:",
+            options=["Shadowing", "Generalization", "Redundancy", "Correlation"],
+            default=["Shadowing", "Redundancy"]
+        )
+        
+        # Map full names to abbreviations
+        analysis_map = {
+            "Shadowing": "SHD",
+            "Generalization": "GEN", 
+            "Redundancy": "RXD",
+            "Correlation": "COR"
+        }
+        
+        if st.button("Run Security Analysis", type="primary"):
+            with st.spinner("Analyzing rule relationships..."):
+                # Convert full names to abbreviations before sending
+                analysis_types_abbr = [analysis_map[atype] for atype in analysis_types]
+                
+                # Get the actual file content from Supabase
+                rules_content = download_file_from_supabase(selected_rules['name'], 'rules')
+                logs_content = download_file_from_supabase(selected_logs['name'], 'traffic')  # Using 'traffic' bucket for logs
+                
+                if rules_content and logs_content:
+                    # Call the original analyze_rules function with file content
+                    response = analyze_rules(
+                        rules_content, 
+                        logs_content, 
+                        analysis_types_abbr
+                    )
                     
                     if response and response.status_code == 200:
                         st.success("✅ Analysis completed!")
                         display_analysis_results(response.json())
                     else:
                         st.error("Analysis failed - check backend connection")
-        else:
-            st.warning("Upload both rules and traffic files")
+                else:
+                    st.error("Failed to download files from Supabase storage")
     else:
-        st.error("No files available")
+        if not rules_files:
+            st.warning("No rules files found in Supabase storage. Please upload rules files first.")
+        if not logs_files:
+            st.warning("No logs files found in Supabase storage. Please upload logs files first.")
     
     st.markdown('</div>', unsafe_allow_html=True)
     
@@ -958,7 +1011,7 @@ def render_performance_profiling():
         selected_traffic = st.selectbox(
             "Select Traffic Data:",
             options=traffic_files,
-            format_func=lambda x: x['file'].split('/')[-1],
+            format_func=lambda x: x['filename'].split('/')[-1],
             key="performance_traffic_select"
         )
     with col2:
@@ -1086,7 +1139,7 @@ def render_rule_ranking():
         selected_rules = st.selectbox(
             "Select Rules Configuration:",
             options=rules_files,
-            format_func=lambda x: x['file'].split('/')[-1],
+            format_func=lambda x: x['filename'].split('/')[-1],
             key="ranking_rules_select"
         )
     with col2:
@@ -1606,9 +1659,10 @@ def render_file_library():
         with col3:
             st.metric("Traffic Logs", len(df[df['file_type'] == 'traffic']))
         
+        # FIX: Use 'filename' instead of 'file'
         st.dataframe(
-            df[['id', 'file', 'file_type', 'uploaded_at']].rename(
-                columns={'file': 'File Name', 'file_type': 'Type', 'uploaded_at': 'Uploaded'}
+            df[['id', 'filename', 'file_type', 'uploaded_at']].rename(
+                columns={'filename': 'File Name', 'file_type': 'Type', 'uploaded_at': 'Uploaded'}
             ),
             use_container_width=True
         )
@@ -1623,11 +1677,10 @@ def render_file_deletion():
 
     if st.session_state.files_data:
         data = st.session_state.files_data
-        df = pd.DataFrame(data)
 
-        # Dropdown options: show ID, filename, and file type
+        # FIX: Use 'filename' instead of 'file'
         file_options = [
-            f"ID {f['id']}: {f['file'].split('/')[-1]} ({f['file_type']})"
+            f"ID {f['id']}: {f['filename']} ({f['file_type']})"
             for f in data
         ]
 

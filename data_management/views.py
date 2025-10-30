@@ -1,30 +1,82 @@
-from rest_framework import viewsets
+from rest_framework import viewsets, status
 from rest_framework.parsers import MultiPartParser, FormParser
-from .models import UploadedFile
-from .serializers import UploadedFileSerializer
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from rest_framework import status
+from rest_framework.authentication import BasicAuthentication
+from rest_framework.permissions import AllowAny
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
 from django.shortcuts import get_object_or_404
 from .models import UploadedFile
+from .serializers import UploadedFileSerializer
+from supabase_client import supabase
 
+@method_decorator(csrf_exempt, name='dispatch')
 class UploadedFileViewSet(viewsets.ModelViewSet):
     queryset = UploadedFile.objects.all()
     serializer_class = UploadedFileSerializer
     parser_classes = (MultiPartParser, FormParser)
+    authentication_classes = [BasicAuthentication]
+    permission_classes = [AllowAny]
+
+    def create(self, request, *args, **kwargs):
+        """Upload file directly to Supabase Storage"""
+        file_obj = request.FILES.get("file")
+        file_type = request.data.get("file_type")
+
+        if not file_obj:
+            return Response({"error": "No file provided"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            # FIX: Determine the correct Supabase bucket based on file type
+            if file_type == 'rules':
+                bucket_name = "waf-rule-files"
+            elif file_type == 'traffic':
+                bucket_name = "waf-log-files"
+            else:
+                return Response({"error": "Invalid file type. Use 'rules' or 'traffic'"}, 
+                              status=status.HTTP_400_BAD_REQUEST)
+
+            # Upload file content to the correct Supabase Storage bucket
+            file_content = file_obj.read()
+            supabase.storage.from_(bucket_name).upload(file_obj.name, file_content)
+
+            # Save metadata in Django DB
+            uploaded_file = UploadedFile.objects.create(
+                filename=file_obj.name,
+                file_type=file_type,
+                file_size=file_obj.size,
+                supabase_path=file_obj.name
+            )
+
+            serializer = self.get_serializer(uploaded_file)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 @api_view(['DELETE'])
+@csrf_exempt
 def delete_file(request, file_id):
-    """Delete a file by ID"""
+    """Delete a file from Supabase Storage and Django DB"""
     file_obj = get_object_or_404(UploadedFile, id=file_id)
 
-    # Optional: also delete the actual file from storage
-    file_path = file_obj.file.path
-    file_obj.delete()
+    try:
+        # FIX: Determine the correct bucket for deletion based on file type
+        if file_obj.file_type == 'rules':
+            bucket_name = "waf-rule-files"
+        elif file_obj.file_type == 'traffic':
+            bucket_name = "waf-traffic-files"
+        else:
+            bucket_name = "waf-csv-files"  # fallback
 
-    # Remove file from filesystem if needed
-    import os
-    if os.path.exists(file_path):
-        os.remove(file_path)
+        # Delete from the correct Supabase bucket
+        supabase.storage.from_(bucket_name).remove([file_obj.supabase_path])
 
-    return Response({"message": "File deleted successfully."}, status=status.HTTP_204_NO_CONTENT)
+        # Delete metadata from DB
+        file_obj.delete()
+        return Response({"message": "File deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
+
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
