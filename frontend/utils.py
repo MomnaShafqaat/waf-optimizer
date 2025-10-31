@@ -148,14 +148,18 @@ def validate_csv_structure(file, file_type):
     except Exception as e:
         return False, f"Error reading file: {str(e)}"
     
-def delete_file(file_id):
-    """Delete a file by ID"""
-    delete_url = f"{API_URL}delete/{file_id}/"
+def delete_file(filename, file_type):
+    """Delete a file by filename and type"""
     try:
-        response = requests.delete(delete_url)
+        data = {
+            'filename': filename,
+            'file_type': file_type
+        }
+        response = requests.delete(f"{API_URL}delete_by_name/", json=data)
         return response
     except Exception as e:
         st.error(f"Deletion error: {str(e)}")
+        return None
 
 # FR04: False Positive Reduction API Functions
 def detect_false_positives_api(session_id, detection_method, threshold):

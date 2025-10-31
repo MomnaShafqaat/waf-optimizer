@@ -1,6 +1,10 @@
 # frontend/app.py
 import streamlit as st
-from components import *
+from components.false_positive_reduction import *
+from components.file_handling import *
+from components.rule_conflict_analysis import *
+from components.rule_ranking import *
+from styles import * 
 from utils import *
 
 # Set page config
@@ -33,7 +37,9 @@ if 'files_data' not in st.session_state:
 # --- End New Section ---
 
 # Render all sections
+render_file_library()
 render_file_management()
+render_file_selection()
 render_rule_analysis()
 render_performance_profiling()
 render_performance_dashboard()
@@ -44,7 +50,7 @@ render_false_positive_management()  # NEW: FR04 False Positive Reduction
 if hasattr(st.session_state, 'current_ranking_session'):
     show_ranking_visualization(st.session_state.current_ranking_session)
 
-render_file_library()
+
 render_file_deletion()
 
 # Footer with enhanced design

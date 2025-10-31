@@ -55,19 +55,18 @@ class UploadedFileViewSet(viewsets.ModelViewSet):
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-
 @api_view(['DELETE'])
 @csrf_exempt
 def delete_file(request, file_id):
-    """Delete a file from Supabase Storage and Django DB"""
+    """Delete a file from Supabase Storage and Django DB by ID"""
     file_obj = get_object_or_404(UploadedFile, id=file_id)
 
     try:
-        # FIX: Determine the correct bucket for deletion based on file type
+        # Determine the correct bucket for deletion based on file type
         if file_obj.file_type == 'rules':
             bucket_name = "waf-rule-files"
         elif file_obj.file_type == 'traffic':
-            bucket_name = "waf-traffic-files"
+            bucket_name = "waf-traffic-files"  # or "waf-log-files" if you renamed it
         else:
             bucket_name = "waf-csv-files"  # fallback
 
@@ -77,6 +76,52 @@ def delete_file(request, file_id):
         # Delete metadata from DB
         file_obj.delete()
         return Response({"message": "File deleted successfully"}, status=status.HTTP_204_NO_CONTENT)
+
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['DELETE'])
+@csrf_exempt
+def delete_file_by_name(request):
+    """Delete a file from Supabase Storage by filename (without database record)"""
+    try:
+        filename = request.data.get('filename')
+        file_type = request.data.get('file_type')  # 'rules' or 'traffic'
+
+        if not filename:
+            return Response({"error": "filename is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not file_type:
+            return Response({"error": "file_type is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Determine the correct bucket for deletion based on file type
+        if file_type == 'rules':
+            bucket_name = "waf-rule-files"
+        elif file_type == 'traffic' or file_type == 'logs':  # Support both 'traffic' and 'logs' types
+            bucket_name = "waf-traffic-files"  # or "waf-log-files" if you renamed it
+        else:
+            return Response({"error": f"Invalid file_type: {file_type}"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Delete from the correct Supabase bucket
+        result = supabase.storage.from_(bucket_name).remove([filename])
+        
+        # Check if deletion was successful
+        if hasattr(result, 'error') and result.error:
+            return Response({"error": f"Supabase deletion failed: {result.error.message}"}, 
+                          status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        # Also try to delete from database if the file exists there
+        try:
+            file_obj = UploadedFile.objects.get(filename=filename, file_type=file_type)
+            file_obj.delete()
+            db_message = " and database record"
+        except UploadedFile.DoesNotExist:
+            db_message = " (Supabase-only file)"
+
+        return Response({
+            "message": f"File '{filename}' deleted successfully from {bucket_name}{db_message}"
+        }, status=status.HTTP_204_NO_CONTENT)
 
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
