@@ -45,6 +45,7 @@ render_performance_profiling()
 render_performance_dashboard()
 render_rule_ranking()
 render_false_positive_management()  # NEW: FR04 False Positive Reduction
+render_threshold_tuning()
 
 # Show ranking visualization if available
 if hasattr(st.session_state, 'current_ranking_session'):
@@ -52,6 +53,7 @@ if hasattr(st.session_state, 'current_ranking_session'):
 
 
 render_file_deletion()
+
 
 # Footer with enhanced design
 st.markdown("""

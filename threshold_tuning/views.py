@@ -5,8 +5,19 @@ from .models import ThresholdSuggestion
 import pandas as pd
 import numpy as np
 import os
+from supabase import create_client
+from dotenv import load_dotenv
+from io import StringIO
 
-
+@api_view(['POST'])
+def delete_threshold_suggestion(request, suggestion_id):
+    """Delete a threshold suggestion"""
+    try:
+        suggestion = ThresholdSuggestion.objects.get(id=suggestion_id)
+        suggestion.delete()
+        return Response({"message": f"Suggestion {suggestion_id} deleted successfully."})
+    except ThresholdSuggestion.DoesNotExist:
+        return Response({"error": "Suggestion not found."}, status=status.HTTP_404_NOT_FOUND)
 @api_view(['GET'])
 def threshold_tuning_view(request):
     """
