@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from utils import *
+from components.file_handling import render_file_selection
 
 def render_false_positive_management():
     """FR04: False Positive Reduction Management with enhanced design"""
@@ -10,7 +11,7 @@ def render_false_positive_management():
     # Enhanced header with gradient
     st.markdown("""
     <div style="background: linear-gradient(135deg, #7c3aed, #8b5cf6); padding: 20px; border-radius: 12px; margin-bottom: 24px;">
-        <h2 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 600;">🎯 False Positive Reduction</h2>
+        <h2 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 600;"> False Positive Reduction</h2>
         <p style="color: rgba(255, 255, 255, 0.8); margin: 8px 0 0 0; font-size: 16px;">Detect and reduce false positives to improve WAF accuracy</p>
     </div>
     """, unsafe_allow_html=True)
@@ -40,91 +41,132 @@ def render_false_positive_detection():
         <p style="color: #a3a3a3; margin: 0; font-size: 14px;">Analyze traffic patterns to identify rules blocking legitimate requests</p>
     </div>
     """, unsafe_allow_html=True)
-    
-    if st.session_state.files_data:
-        files_data = st.session_state.files_data
-        sessions = [f for f in files_data if f['file_type'] in ['rules', 'traffic']]
-        
-        if sessions:
-            # Configuration section
-            st.markdown("### Configuration")
-            col1, col2 = st.columns(2)
-            with col1:
-                session_options = [{"id": 1, "name": "Analysis Session 1"}]
-                selected_session = st.selectbox(
-                    "Select Analysis Session:",
-                    options=session_options,
-                    format_func=lambda x: x['name'],
-                    key="fp_session_select"
-                )
-            with col2:
-                detection_method = st.selectbox(
-                    "Detection Method:",
-                    options=["manual", "learning", "ai"],
-                    format_func=lambda x: x.title(),
-                    key="detection_method"
-                )
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                threshold = st.slider("False Positive Threshold:", 0.05, 0.5, 0.1, 0.05)
-            with col2:
-                st.markdown("""
-                <div style="background: #242424; padding: 16px; border-radius: 8px; border: 1px solid #333333;">
-                    <div style="color: #10b981; font-size: 14px; font-weight: 500;">Current Threshold</div>
-                    <div style="color: #ffffff; font-size: 20px; font-weight: 600;">{:.1%}</div>
-                </div>
-                """.format(threshold), unsafe_allow_html=True)
-            
-            # Detection button with enhanced styling
-            col1, col2, col3 = st.columns([1, 2, 1])
-            with col2:
-                if st.button("🔍 Detect False Positives", type="primary", key="detect_fp", use_container_width=True):
-                    if selected_session:
-                        with st.spinner("Analyzing traffic patterns for false positives..."):
-                            response = detect_false_positives_api(selected_session['id'], detection_method, threshold)
-                            
-                            if response and response.status_code == 200:
-                                result = response.json()
-                                st.success(f"✅ {result['message']}")
-                                
-                                # Enhanced results display
-                                data = result['data']
-                                metrics_data = [
-                                    {"label": "Rules Analyzed", "value": data['total_rules_analyzed']},
-                                    {"label": "High FP Rules", "value": data['high_false_positive_rules']},
-                                    {"label": "Detection Method", "value": data['detection_method'].title()},
-                                    {"label": "Threshold Used", "value": f"{data['threshold_used']:.1%}"}
-                                ]
-                                display_enhanced_metrics(metrics_data)
-                                
-                                # Show detected false positives with enhanced design
-                                false_positives = data.get('false_positives_detected', [])
-                                if false_positives:
-                                    st.markdown("### 🚨 Detected False Positives")
-                                    for fp in false_positives:
-                                        status_color = "#ef4444" if fp['false_positive_rate'] > 0.2 else "#f59e0b"
-                                        st.markdown(f"""
-                                        <div style="background: #242424; padding: 16px; border-radius: 8px; border: 1px solid #333333; margin: 8px 0;">
-                                            <div style="display: flex; justify-content: space-between; align-items: center;">
-                                                <div>
-                                                    <div style="color: #ffffff; font-size: 16px; font-weight: 600;">Rule {fp['rule_id']}</div>
-                                                    <div style="color: #a3a3a3; font-size: 14px;">False Positive Rate: <span style="color: {status_color}; font-weight: 600;">{fp['false_positive_rate']:.1%}</span></div>
-                                                </div>
-                                                <div style="background: {status_color}; color: #ffffff; padding: 4px 12px; border-radius: 6px; font-size: 12px; font-weight: 500;">
-                                                    {fp['status'].title()}
-                                                </div>
-                                            </div>
-                                        </div>
-                                        """, unsafe_allow_html=True)
-                            else:
-                                st.error("❌ False positive detection failed")
-                    else:
-                        st.warning("Please select an analysis session")
-        else:
-            st.warning("No analysis sessions available")
-    else:
+
+    # Use the shared file selection UI to pick rules + logs files
+    selected_rules, selected_logs = render_file_selection(key_prefix='fp_detect')
+
+    if not selected_rules or not selected_logs:
         st.error("No files available for analysis")
+        return
+
+    # Attempt to create a real RuleAnalysisSession in the backend using uploaded file records
+    selected_session = None
+    try:
+        # Get all uploaded files metadata from backend
+        uploaded_files = get_files_data()
+        # Find matching UploadedFile entries by filename
+        rules_uploaded = next((f for f in uploaded_files if f.get('filename') == selected_rules['name'] and f.get('file_type') in ['rules']), None)
+        logs_uploaded = next((f for f in uploaded_files if f.get('filename') == selected_logs['name'] and f.get('file_type') in ['traffic', 'logs']), None)
+
+        if rules_uploaded and logs_uploaded:
+            # Create a session on the backend and use its ID
+            session_name = f"{selected_rules['name']} + {selected_logs['name']}"
+            resp = create_analysis_session(session_name, rules_uploaded['id'], logs_uploaded['id'])
+            if resp and resp.status_code in [200, 201]:
+                session_data = resp.json()
+                # API returns created session; ensure we have an id
+                session_id = session_data.get('id') or session_data.get('pk') or session_data.get('session_id')
+                if not session_id and isinstance(session_data, dict):
+                    # Some serializers nest the object under keys
+                    session_id = session_data.get('data', {}).get('session_id')
+
+                if session_id:
+                    selected_session = {
+                        'id': session_id,
+                        'name': session_name,
+                        'rules_file': rules_uploaded,
+                        'logs_file': logs_uploaded
+                    }
+        else:
+            # If UploadedFile records are missing, leave selected_session None so user can be informed
+            selected_session = None
+    except Exception:
+        selected_session = None
+
+    # Configuration section
+    st.markdown("### Configuration")
+    col1, col2 = st.columns(2)
+    with col1:
+        # Use .get to avoid subscripting None or non-dict types
+        session_name = None
+        if isinstance(selected_session, dict):
+            session_name = selected_session.get('name')
+
+        if session_name:
+            st.info(f"Selected session: {session_name}")
+        else:
+            st.warning("No backend analysis session available — upload selected files via File Management to enable detection.")
+    with col2:
+        detection_method = st.selectbox(
+            "Detection Method:",
+            options=["manual", "learning", "ai"],
+            format_func=lambda x: x.title(),
+            key="detection_method"
+        )
+
+    col1, col2 = st.columns(2)
+    with col1:
+        threshold = st.slider("False Positive Threshold:", 0.05, 0.5, 0.1, 0.05)
+    with col2:
+        st.markdown("""
+        <div style="background: #242424; padding: 16px; border-radius: 8px; border: 1px solid #333333;">
+            <div style="color: #10b981; font-size: 14px; font-weight: 500;">Current Threshold</div>
+            <div style="color: #ffffff; font-size: 20px; font-weight: 600;">{:.1%}</div>
+        </div>
+        """.format(threshold), unsafe_allow_html=True)
+
+    # Detection button with enhanced styling
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        if st.button("🔍 Detect False Positives", type="primary", key="detect_fp", width='stretch'):
+            with st.spinner("Analyzing traffic patterns for false positives..."):
+                # Ensure we have a backend session id; otherwise show an error
+                if not selected_session or not selected_session.get('id'):
+                    st.error("❌ Could not create analysis session on backend. Please upload selected files via File Management first.")
+                    return
+
+                # Call backend detection endpoint (backend expects a session id referencing stored UploadedFile objects)
+                response = detect_false_positives_api(selected_session['id'], detection_method, threshold)
+
+                if response and response.status_code == 200:
+                    result = response.json()
+                    st.success(f"✅ {result['message']}")
+
+                    # Enhanced results display
+                    data = result['data']
+                    metrics_data = [
+                        {"label": "Rules Analyzed", "value": data.get('total_rules_analyzed', 0)},
+                        {"label": "High FP Rules", "value": data.get('high_false_positive_rules', 0)},
+                        {"label": "Detection Method", "value": data.get('detection_method', '').title()},
+                        {"label": "Threshold Used", "value": f"{data.get('threshold_used', threshold):.1%}"}
+                    ]
+                    # Simple metrics display (avoid external dependency)
+                    cols = st.columns(len(metrics_data)) if metrics_data else []
+                    for i, metric in enumerate(metrics_data):
+                        with cols[i]:
+                            st.metric(metric['label'], metric['value'])
+
+                    # Show detected false positives with enhanced design
+                    false_positives = data.get('false_positives_detected', [])
+                    if false_positives:
+                        st.markdown("### 🚨 Detected False Positives")
+                        for fp in false_positives:
+                            status_color = "#ef4444" if fp['false_positive_rate'] > 0.2 else "#f59e0b"
+                            st.markdown(f"""
+                            <div style="background: #242424; padding: 16px; border-radius: 8px; border: 1px solid #333333; margin: 8px 0;">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <div>
+                                        <div style="color: #ffffff; font-size: 16px; font-weight: 600;">Rule {fp['rule_id']}</div>
+                                        <div style="color: #a3a3a3; font-size: 14px;">False Positive Rate: <span style="color: {status_color}; font-weight: 600;">{fp['false_positive_rate']:.1%}</span></div>
+                                    </div>
+                                    <div style="background: {status_color}; color: #ffffff; padding: 4px 12px; border-radius: 6px; font-size: 12px; font-weight: 500;">
+                                        {fp['status'].title()}
+                                    </div>
+                                </div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                else:
+                    st.error("❌ False positive detection failed")
 
 def render_learning_mode():
     """FR04-03: Learning Mode"""
@@ -222,13 +264,13 @@ def render_whitelist_suggestions():
     st.subheader("📝 Whitelist Suggestions")
     st.write("Generate intelligent whitelist patterns to reduce false positives")
     
-    # Mock false positive data for demonstration
-    false_positives = [
-        {"id": 1, "rule_id": "1001", "false_positive_rate": 0.15, "status": "detected"},
-        {"id": 2, "rule_id": "1002", "false_positive_rate": 0.22, "status": "analyzing"},
-        {"id": 3, "rule_id": "1003", "false_positive_rate": 0.18, "status": "detected"},
-    ]
-    
+    # Fetch false positives from backend
+    fp_response = get_false_positive_dashboard_api()
+    false_positives = []
+    if fp_response and fp_response.status_code == 200:
+        fp_data = fp_response.json().get('data', {})
+        false_positives = fp_data.get('recent_false_positives', [])
+
     if false_positives:
         col1, col2 = st.columns(2)
         with col1:
@@ -273,7 +315,7 @@ def render_whitelist_suggestions():
             else:
                 st.warning("Please select a false positive and suggestion types")
     else:
-        st.info("No false positives detected yet. Run detection first.")
+        st.info("No false positives detected yet. Run detection first or check backend dashboard.")
 
 def render_whitelist_export():
     """FR04-04: Whitelist Export"""
@@ -282,21 +324,26 @@ def render_whitelist_export():
     
     col1, col2 = st.columns(2)
     with col1:
-        if st.session_state.files_data:
-            sessions = [f for f in st.session_state.files_data if f['file_type'] in ['rules', 'traffic']]
-            if sessions:
-                selected_session = st.selectbox(
-                    "Select Session:",
-                    options=[{"id": 1, "name": "Analysis Session 1"}],
-                    format_func=lambda x: x['name'],
-                    key="export_session_select"
-                )
+        # Use same file selection UI to pick rules + logs and then create a backend session
+        sel_rules, sel_logs = render_file_selection(key_prefix='fp_export')
+        selected_session = None
+        if sel_rules and sel_logs:
+            uploaded_files = get_files_data()
+            rules_uploaded = next((f for f in uploaded_files if f.get('filename') == sel_rules['name'] and f.get('file_type') in ['rules']), None)
+            logs_uploaded = next((f for f in uploaded_files if f.get('filename') == sel_logs['name'] and f.get('file_type') in ['traffic', 'logs']), None)
+            if rules_uploaded and logs_uploaded:
+                session_name = f"{sel_rules['name']} + {sel_logs['name']}"
+                resp = create_analysis_session(session_name, rules_uploaded['id'], logs_uploaded['id'])
+                if resp and resp.status_code in [200, 201]:
+                    session_obj = resp.json()
+                    session_id = session_obj.get('id') or session_obj.get('pk') or session_obj.get('session_id')
+                    selected_session = {'id': session_id, 'name': session_name}
+                else:
+                    selected_session = None
             else:
-                st.warning("No sessions available")
-                selected_session = None
+                st.warning("Please upload selected files via File Management before exporting.")
         else:
-            st.error("No files available")
-            selected_session = None
+            st.info("Select files in the File Selection area to prepare an export.")
     
     with col2:
         export_name = st.text_input("Export Filename:", "waf_whitelist.csv", key="export_filename")

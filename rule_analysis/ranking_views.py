@@ -7,6 +7,7 @@ import pandas as pd
 from .models import RulePerformance, RuleRankingSession
 from .ranking_algorithm import SmartRuleRanker
 from data_management.models import UploadedFile
+from .supabase_utils import get_file_as_dataframe  # ADD THIS
 
 def is_admin(user):
     """FR05-03: Check if user has admin role"""
@@ -23,19 +24,20 @@ def generate_rule_ranking(request):
         
         print(f"Generating ranking with rules_file_id: {rules_file_id}")
         
-        # Get real rules data from uploaded file
+        # Get real rules data from uploaded file - UPDATED FOR SUPABASE
         if rules_file_id:
             try:
                 rules_file = UploadedFile.objects.get(id=rules_file_id, file_type='rules')
-                # Read the actual rules CSV file
-                rules_df = pd.read_csv(rules_file.file.path)
-                print(f"Loaded rules file: {rules_file.file.name}")
+                # CHANGED: Use Supabase instead of local file
+                rules_df = get_file_as_dataframe(rules_file)
+                print(f"Loaded rules file: {rules_file.filename} from Supabase")
             except UploadedFile.DoesNotExist:
                 return Response({'error': 'Rules file not found'}, status=404)
             except Exception as e:
-                return Response({'error': f'Error reading rules file: {str(e)}'}, status=400)
+                return Response({'error': f'Error reading rules file from Supabase: {str(e)}'}, status=400)
         else:
             return Response({'error': 'rules_file_id is required'}, status=400)
+        
         
         # Get real performance data from FR03 database
         performance_data = []

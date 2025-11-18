@@ -5,6 +5,15 @@ import pandas as pd
 from .hit_counter import RuleHitCounter
 from .models import RulePerformance
 from data_management.models import UploadedFile
+from .supabase_utils import get_file_as_dataframe
+# rule_analysis/hit_count_views.py
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+import pandas as pd
+from .hit_counter import RuleHitCounter
+from .models import RulePerformance
+from data_management.models import UploadedFile
+from .supabase_utils import get_file_as_dataframe
 
 @api_view(['POST'])
 def update_rule_hit_counts(request):
@@ -12,31 +21,38 @@ def update_rule_hit_counts(request):
     FR03-01, FR03-02 & FR03-03: Complete performance profiling
     """
     try:
-        # Handle empty request body gracefully
-        if not request.data:
-            traffic_file_id = None
-        else:
-            traffic_file_id = request.data.get('traffic_file_id')
+        # Get traffic file ID from request
+        traffic_file_id = request.data.get('traffic_file_id')
         
-        print(f"Request data: {request.data}")
-        print(f"Traffic file ID: {traffic_file_id}")
+        if not traffic_file_id:
+            return Response({'error': 'traffic_file_id is required'}, status=400)
         
-        # Use mock data for testing - DEFINE THIS VARIABLE
-        mock_traffic_data = pd.DataFrame([
-            {'rule_id': '1001', 'timestamp': '2024-01-15 10:30:00', 'action': 'blocked'},
-            {'rule_id': '1001', 'timestamp': '2024-01-15 10:31:00', 'action': 'blocked'},
-            {'rule_id': '1002', 'timestamp': '2024-01-15 10:32:00', 'action': 'blocked'},
-            {'rule_id': '1003', 'timestamp': '2024-01-15 10:33:00', 'action': 'blocked'},
-            {'rule_id': '1001', 'timestamp': '2024-01-15 10:34:00', 'action': 'blocked'},
-            {'rule_id': '1005', 'timestamp': '2024-01-15 10:35:00', 'action': 'blocked'},
-            {'rule_id': '-', 'timestamp': '2024-01-15 10:36:00', 'action': 'passed'},
-            {'rule_id': '1003', 'timestamp': '2024-01-15 10:37:00', 'action': 'blocked'},
-        ])
+        print(f"Processing traffic file ID: {traffic_file_id}")
         
+        # Load traffic data from Supabase
+        try:
+            traffic_file = UploadedFile.objects.get(id=traffic_file_id, file_type__in=['traffic', 'logs'])
+            traffic_data = get_file_as_dataframe(traffic_file)
+            print(f"Loaded traffic file: {traffic_file.filename} from Supabase")
+            
+            # Validate required columns in traffic data
+            required_columns = ['rule_id', 'timestamp', 'action']
+            missing_columns = [col for col in required_columns if col not in traffic_data.columns]
+            if missing_columns:
+                return Response({
+                    'error': f'Traffic file missing required columns: {missing_columns}'
+                }, status=400)
+                
+        except UploadedFile.DoesNotExist:
+            return Response({'error': 'Traffic file not found'}, status=404)
+        except Exception as e:
+            return Response({'error': f'Error reading traffic file from Supabase: {str(e)}'}, status=400)
+        
+        # Process the data
         hit_counter = RuleHitCounter()
         
         # FR03-01: Update hit counts
-        hit_result = hit_counter.process_traffic_logs(mock_traffic_data)
+        hit_result = hit_counter.process_traffic_logs(traffic_data)
         
         # FR03-02: Calculate performance metrics
         total_requests = hit_result['total_requests_processed']

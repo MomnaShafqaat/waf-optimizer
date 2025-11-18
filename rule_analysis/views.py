@@ -12,6 +12,7 @@ import io
 from rest_framework import status
 from django.shortcuts import get_object_or_404
 from .models import UploadedFile
+from .supabase_utils import get_file_as_string, get_file_as_dataframe
 
 class RuleAnalysisSessionViewSet(viewsets.ModelViewSet):
     """ViewSet for rule analysis sessions"""
@@ -87,8 +88,22 @@ def analyze_rules(request):
     try:
         print("Analyze rules endpoint called!")
         
+        # Support session-based analysis: load files for provided session_id
+        if request.data.get('session_id'):
+            session_id = request.data.get('session_id')
+            session = get_object_or_404(RuleAnalysisSession, id=session_id)
+            if session.rules_file and session.traffic_file:
+                try:
+                    rules_content = get_file_as_string(session.rules_file)
+                    logs_content = get_file_as_string(session.traffic_file)
+                    analysis_types = request.data.get('analysis_types', session.analysis_types or ['SHD', 'RXD'])
+                except Exception as e:
+                    return Response({'error': f'Failed to load session files: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            else:
+                return Response({'error': 'Session does not reference both rules and traffic files'}, status=status.HTTP_400_BAD_REQUEST)
+
         # Check if files are sent as multipart/form-data
-        if request.FILES:
+        elif request.FILES:
             print("Processing files from multipart/form-data...")
             rules_file = request.FILES.get('rules_file')
             logs_file = request.FILES.get('logs_file')  # Changed from traffic_file to logs_file
@@ -160,11 +175,14 @@ def analyze_rules(request):
             
             print(f"Analysis completed. Total relationships found: {analysis_results.get('total_relationships', 0)}")
             
-            # Create analysis session record WITHOUT file references (since we don't have file IDs)
-            session = RuleAnalysisSession.objects.create(
-                name=f"Analysis Session {timezone.now().strftime('%Y-%m-%d %H:%M')}",
-                analysis_types=analysis_types
-            )
+            # Create or reuse analysis session record
+            if request.data.get('session_id'):
+                session = get_object_or_404(RuleAnalysisSession, id=request.data.get('session_id'))
+            else:
+                session = RuleAnalysisSession.objects.create(
+                    name=f"Analysis Session {timezone.now().strftime('%Y-%m-%d %H:%M')}",
+                    analysis_types=analysis_types
+                )
             
             # Store individual relationships
             relationships = analysis_results.get('relationships', {})
