@@ -104,11 +104,19 @@ def upload_file(file, file_type):
         if response.status_code in [200, 201]:
             return response.json()  # returns dict with 'filename', 'supabase_path', etc.
         else:
-            st.error(f"Upload failed: {response.status_code} {response.text}")
-            return None
+            # Return the error information so the calling function can handle it
+            error_info = {
+                'error': response.text,
+                'status_code': response.status_code
+            }
+            return error_info
     except Exception as e:
-        st.error(f"Upload error: {str(e)}")
-        return None
+        # Return the exception information so the calling function can handle it
+        error_info = {
+            'error': str(e),
+            'status_code': 500
+        }
+        return error_info
 
 def validate_csv_structure(file, file_type):
     """Validate CSV file structure based on file type"""
@@ -155,7 +163,7 @@ def delete_file(filename, file_type):
             'filename': filename,
             'file_type': file_type
         }
-        response = requests.delete(f"{API_URL}delete_by_name/", json=data)
+        response = requests.delete(f"{API_URL}delete_by_name", json=data)
         return response
     except Exception as e:
         st.error(f"Deletion error: {str(e)}")
