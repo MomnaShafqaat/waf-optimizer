@@ -24,7 +24,7 @@ def render_file_management():
         traffic_file = st.file_uploader("Upload traffic CSV", type=['csv'], key="traffic_upload")
 
     if rules_file or traffic_file:
-        if st.button("📤 Upload Files", type="primary"):
+        if st.button("📤 Upload Files", type="primary", width='stretch'):
             upload_success = True
             uploaded_files = []
             
@@ -203,7 +203,7 @@ def render_file_library():
             df[['id', 'filename', 'file_type', 'uploaded_at']].rename(
                 columns={'filename': 'File Name', 'file_type': 'Type', 'uploaded_at': 'Uploaded'}
             ),
-            use_container_width=True
+            width='stretch'
         )
     else:
         st.info("No files found in Supabase storage")
@@ -276,7 +276,7 @@ def render_file_deletion():
     st.markdown('</div>', unsafe_allow_html=True)
 
 
-def render_file_selection():
+def render_file_selection(key_prefix: str = None):
     """
     Render file selection dropdowns for rules and logs files
     Fetches files directly from Supabase storage and stores in session state
@@ -324,11 +324,12 @@ def render_file_selection():
     
     with col1:
         st.markdown("**WAF Rules File**")
+        key_rules = f"{key_prefix}_rules_file_selector" if key_prefix else "rules_file_selector"
         selected_rules = st.selectbox(
             "Select Rules File:", 
             options=rules_files, 
             format_func=lambda x: x['name'],
-            key="rules_file_selector",
+            key=key_rules,
             help="Choose the WAF rules file for analysis"
         )
         if selected_rules:
@@ -336,11 +337,12 @@ def render_file_selection():
     
     with col2:
         st.markdown("**Traffic Logs File**")
+        key_logs = f"{key_prefix}_logs_file_selector" if key_prefix else "logs_file_selector"
         selected_logs = st.selectbox(
             "Select Logs File:", 
             options=logs_files, 
             format_func=lambda x: x['name'],
-            key="logs_file_selector",
+            key=key_logs,
             help="Choose the traffic logs file for analysis"
         )
         if selected_logs:

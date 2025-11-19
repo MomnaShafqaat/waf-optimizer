@@ -73,7 +73,7 @@ def render_performance_profiling():
                         metrics_df.columns = ['Rule ID', 'Match Frequency', 'Effectiveness Ratio', 'Hit Count']
                         metrics_df['Match Frequency'] = metrics_df['Match Frequency'].apply(lambda x: f"{x:.2%}")
                         metrics_df['Effectiveness Ratio'] = metrics_df['Effectiveness Ratio'].apply(lambda x: f"{x:.1%}")
-                        st.dataframe(metrics_df, use_container_width=True)
+                        st.dataframe(metrics_df, width='stretch')
                         
                 else:
                     st.error("❌ Performance analysis failed")
@@ -109,7 +109,7 @@ def render_performance_dashboard():
         if top_rules:
             st.subheader("🏆 Top Performing Rules")
             perf_df = pd.DataFrame(top_rules)
-            st.dataframe(perf_df, use_container_width=True)
+            st.dataframe(perf_df, width='stretch')
         
         # All rules with metrics
         all_rules = dashboard_data.get('all_rules', [])
@@ -125,7 +125,7 @@ def render_performance_dashboard():
                     rules_df['effectiveness_ratio'] = rules_df['effectiveness_ratio'].apply(
                         lambda x: f"{float(x):.1%}" if x else "0%"
                     )
-                st.dataframe(rules_df, use_container_width=True)
+                st.dataframe(rules_df, width='stretch')
     else:
         st.error("Error loading dashboard")
     
@@ -221,7 +221,7 @@ def show_ranking_visualization(session_id):
                 fig.data[-1].line.color = '#94a3b8'
                 fig.data[-1].name = 'Reference'
                 
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width='stretch')
                 
                 st.info(f"💡 **Performance Insight:** Optimized rule order can improve processing speed by approximately {comparison_data['improvement']:.1f}%")
                 
@@ -258,7 +258,7 @@ def show_ranking_visualization(session_id):
                 
                 st.dataframe(
                     table_df,
-                    use_container_width=True,
+                    width='stretch',
                     height=400
                 )
                 

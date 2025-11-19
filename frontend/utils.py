@@ -5,6 +5,8 @@ import streamlit as st
 # API URLs
 API_URL = "http://127.0.0.1:8000/api/files/"
 RULE_ANALYSIS_API_URL = "http://127.0.0.1:8000/api/analyze/"
+# Sessions endpoint (RuleAnalysisSession ViewSet registered as 'sessions')
+SESSIONS_API_URL = "http://127.0.0.1:8000/api/sessions/"
 RANKING_API_URL = "http://127.0.0.1:8000/api/ranking/generate/"
 RANKING_COMPARISON_URL = "http://127.0.0.1:8000/api/ranking/comparison/"
 HIT_COUNTS_UPDATE_URL = "http://127.0.0.1:8000/api/hit-counts/update/"
@@ -33,6 +35,35 @@ def get_files_data():
         return response.json() if response.status_code == 200 else []
     except:
         return []
+
+def create_analysis_session(name, rules_file_id, traffic_file_id, analysis_types=None):
+    """Create a RuleAnalysisSession via the backend API and return the session object"""
+    try:
+        if analysis_types is None:
+            analysis_types = ['SHD', 'RXD', 'GEN', 'COR']
+        data = {
+            'name': name,
+            'rules_file': rules_file_id,
+            'traffic_file': traffic_file_id,
+            'analysis_types': analysis_types
+        }
+        response = requests.post(SESSIONS_API_URL, json=data)
+        return response
+    except Exception as e:
+        st.error(f"Create session error: {str(e)}")
+        return None
+
+def analyze_rules_by_session(session_id, analysis_types=None):
+    """Request rule analysis for an existing backend session (session_id)."""
+    try:
+        data = {'session_id': session_id}
+        if analysis_types:
+            data['analysis_types'] = analysis_types
+        response = requests.post(RULE_ANALYSIS_API_URL, json=data, timeout=60)
+        return response
+    except Exception as e:
+        st.error(f"Analyze by session error: {str(e)}")
+        return None
 
 def analyze_rules(rules_content, logs_content, analysis_types):
     """Run rule analysis with file content as strings"""

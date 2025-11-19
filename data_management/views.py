@@ -10,6 +10,7 @@ from django.shortcuts import get_object_or_404
 from .models import UploadedFile
 from .serializers import UploadedFileSerializer
 from supabase_client import supabase
+import io
 
 @method_decorator(csrf_exempt, name='dispatch')
 class UploadedFileViewSet(viewsets.ModelViewSet):
@@ -39,7 +40,12 @@ class UploadedFileViewSet(viewsets.ModelViewSet):
 
             # Upload file content to the correct Supabase Storage bucket
             file_content = file_obj.read()
-            supabase.storage.from_(bucket_name).upload(file_obj.name, file_content)
+            # Use a file-like object for upload to be compatible with different Supabase clients
+            try:
+                supabase.storage.from_(bucket_name).upload(file_obj.name, io.BytesIO(file_content))
+            except Exception:
+                # Fallback: try uploading raw bytes
+                supabase.storage.from_(bucket_name).upload(file_obj.name, file_content)
 
             # Save metadata in Django DB
             uploaded_file = UploadedFile.objects.create(
@@ -65,10 +71,10 @@ def delete_file(request, file_id):
         # Determine the correct bucket for deletion based on file type
         if file_obj.file_type == 'rules':
             bucket_name = "waf-rule-files"
-        elif file_obj.file_type == 'traffic':
-            bucket_name = "waf-traffic-files"  # or "waf-log-files" if you renamed it
+        elif file_obj.file_type == 'traffic' or file_obj.file_type == 'logs':
+            bucket_name = "waf-log-files"  # Use consistent bucket name
         else:
-            bucket_name = "waf-csv-files"  # fallback
+            bucket_name = "waf-log-files"  # fallback
 
         # Delete from the correct Supabase bucket
         supabase.storage.from_(bucket_name).remove([file_obj.supabase_path])
@@ -99,7 +105,7 @@ def delete_file_by_name(request):
         if file_type == 'rules':
             bucket_name = "waf-rule-files"
         elif file_type == 'traffic' or file_type == 'logs':  # Support both 'traffic' and 'logs' types
-            bucket_name = "waf-traffic-files"  # or "waf-log-files" if you renamed it
+            bucket_name = "waf-log-files"  # Use consistent bucket name
         else:
             return Response({"error": f"Invalid file_type: {file_type}"}, status=status.HTTP_400_BAD_REQUEST)
 
