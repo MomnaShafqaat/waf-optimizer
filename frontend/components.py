@@ -14,15 +14,16 @@ def update_performance_data(payload):
     try:
         print(f"🔄 Sending performance analysis payload: {payload}")
         
-        # Validate required fields
-        required_fields = ["traffic_file_id", "rules_file_id"]
+        # Validate required fields - FIXED: match backend expectations
+        required_fields = ["rules_file_id", "session_name"]
         for field in required_fields:
             if field not in payload:
                 st.error(f"❌ Missing required field: {field}")
                 return None
         
+        # FIXED: Use the correct endpoint and payload structure
         response = requests.post(
-            f'{API_BASE}/performance/analyze/',
+            f'{API_BASE}/performance/analyze/',  # Make sure this endpoint exists
             json=payload,
             timeout=30
         )
@@ -37,13 +38,15 @@ def generate_rule_ranking(rules_file_id, session_name):
     try:
         print(f"🔄 Generating ranking for rules_file_id: {rules_file_id}")
         
+        # FIXED: Use the exact payload structure backend expects
         ranking_payload = {
             "rules_file_id": rules_file_id,
             "session_name": session_name
         }
         
+        # FIXED: Make sure this endpoint exists in your Django URLs
         response = requests.post(
-            f'{API_BASE}/ranking/generate/',
+            f'{API_BASE}/ranking/generate/',  # Check if this endpoint exists
             json=ranking_payload,
             timeout=30
         )
@@ -52,16 +55,15 @@ def generate_rule_ranking(rules_file_id, session_name):
     except Exception as e:
         st.error(f"🚨 Ranking generation API error: {e}")
         return None
-
 def update_hit_counts(traffic_file_id, rules_file_id):
     """Update hit counts for rules - FIXED"""
     try:
         print(f"🔄 Updating hit counts for traffic: {traffic_file_id}, rules: {rules_file_id}")
         
+        # FIXED: Match backend expected payload - CHANGED as requested
         hitcount_payload = {
             "traffic_file_id": traffic_file_id,
-            "rules_file_id": rules_file_id,
-            "update_type": "incremental"
+            "rules_file_id": rules_file_id
         }
         
         response = requests.post(
@@ -74,7 +76,7 @@ def update_hit_counts(traffic_file_id, rules_file_id):
     except Exception as e:
         st.error(f"🚨 Hit counts update API error: {e}")
         return None
-        
+    
 def get_performance_dashboard():
     """Get performance dashboard data"""
     try:
@@ -1328,9 +1330,8 @@ def render_performance_dashboard():
     
     st.markdown('</div>', unsafe_allow_html=True)
 
-
 def show_ranking_visualization(session_id):
-    """Enhanced ranking visualization"""
+    """Enhanced ranking visualization with proper table display"""
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.header("📈 Optimization Results")
     
@@ -1342,97 +1343,126 @@ def show_ranking_visualization(session_id):
             # Enhanced metrics
             col1, col2, col3, col4 = st.columns(4)
             with col1:
-                st.metric("Performance Gain", f"{comparison_data['improvement']:.1f}%")
+                st.metric("Performance Gain", f"{comparison_data.get('improvement', 0):.1f}%")
             with col2:
-                st.metric("Rules Improved", comparison_data['summary']['rules_moved_up'])
+                st.metric("Rules Improved", comparison_data.get('summary', {}).get('rules_moved_up', 0))
             with col3:
-                st.metric("Rules Adjusted", comparison_data['summary']['rules_moved_down'])
+                st.metric("Rules Adjusted", comparison_data.get('summary', {}).get('rules_moved_down', 0))
             with col4:
-                st.metric("Avg Change", f"{comparison_data['summary']['average_position_change']:+.1f}")
+                st.metric("Avg Change", f"{comparison_data.get('summary', {}).get('average_position_change', 0):+.1f}")
             
-            if comparison_data['comparison_data']:
+            # Check if comparison_data exists and has data
+            if comparison_data.get('comparison_data'):
                 df = pd.DataFrame(comparison_data['comparison_data'])
                 
-                # Enhanced visualization
-                fig = px.scatter(
-                    df,
-                    x='current_position',
-                    y='proposed_position',
-                    size='hit_count',
-                    color='position_change',
-                    hover_data=['rule_id', 'priority_score', 'category'],
-                    title='Rule Position Optimization',
-                    labels={
-                        'current_position': 'Current Position',
-                        'proposed_position': 'Optimized Position',
-                        'position_change': 'Improvement',
-                        'hit_count': 'Usage Frequency'
-                    }
-                )
-                
-                max_pos = max(df['current_position'].max(), df['proposed_position'].max())
-                fig.add_trace(px.line(x=[1, max_pos], y=[1, max_pos]).data[0])
-                fig.data[-1].line.dash = 'dash'
-                fig.data[-1].line.color = '#94a3b8'
-                fig.data[-1].name = 'Reference'
-                
-                st.plotly_chart(fig, use_container_width=True)
-                
-                st.info(f"💡 **Performance Insight:** Optimized rule order can improve processing speed by approximately {comparison_data['improvement']:.1f}%")
-                
-                # Add detailed table view of reordered rules
-                st.subheader("📋 Detailed Rule Reordering")
+                # Display the ranking table immediately
+                st.subheader("📋 Optimized Rule Order")
                 
                 # Create display dataframe with better formatting
                 display_df = df.copy()
-                display_df = display_df.sort_values('proposed_position')
-                display_df['Position Change'] = display_df['position_change'].apply(
-                    lambda x: f"↑ {abs(x)}" if x > 0 else (f"↓ {abs(x)}" if x < 0 else "→ 0")
-                )
-                display_df['Status'] = display_df.apply(
-                    lambda row: '🔥 High Performance' if row.get('is_high_performance', False) 
-                    else ('⚠️ Rarely Used' if row.get('is_rarely_used', False) else '✓ Normal'),
-                    axis=1
-                )
                 
-                # Select and rename columns for display
-                columns_to_show = {
-                    'rule_id': 'Rule ID',
-                    'current_position': 'Original Position',
-                    'proposed_position': 'New Position',
-                    'Position Change': 'Change',
-                    'hit_count': 'Hit Count',
-                    'priority_score': 'Priority Score',
-                    'category': 'Category',
-                    'Status': 'Status'
-                }
+                # Ensure we have the required columns
+                if 'current_position' in display_df.columns and 'proposed_position' in display_df.columns:
+                    display_df = display_df.sort_values('proposed_position')
+                    
+                    # Calculate position changes
+                    display_df['Position Change'] = display_df.apply(
+                        lambda row: f"↑ {abs(row['proposed_position'] - row['current_position'])}" 
+                        if row['proposed_position'] < row['current_position'] 
+                        else (f"↓ {abs(row['proposed_position'] - row['current_position'])}" 
+                              if row['proposed_position'] > row['current_position'] 
+                              else "→ 0"),
+                        axis=1
+                    )
+                    
+                    # Add status indicators
+                    display_df['Status'] = display_df.apply(
+                        lambda row: '🔥 High Performance' if row.get('hit_count', 0) > 10 
+                        else ('⚠️ Rarely Used' if row.get('hit_count', 0) <= 2 else '✓ Normal'),
+                        axis=1
+                    )
+                    
+                    # Select and rename columns for display
+                    columns_mapping = {}
+                    if 'rule_id' in display_df.columns:
+                        columns_mapping['rule_id'] = 'Rule ID'
+                    if 'current_position' in display_df.columns:
+                        columns_mapping['current_position'] = 'Original Position'
+                    if 'proposed_position' in display_df.columns:
+                        columns_mapping['proposed_position'] = 'New Position'
+                    if 'Position Change' in display_df.columns:
+                        columns_mapping['Position Change'] = 'Change'
+                    if 'hit_count' in display_df.columns:
+                        columns_mapping['hit_count'] = 'Hit Count'
+                    if 'priority_score' in display_df.columns:
+                        columns_mapping['priority_score'] = 'Priority Score'
+                    if 'category' in display_df.columns:
+                        columns_mapping['category'] = 'Category'
+                    if 'Status' in display_df.columns:
+                        columns_mapping['Status'] = 'Status'
+                    
+                    # Filter to only include columns that exist
+                    existing_columns = [col for col in columns_mapping.keys() if col in display_df.columns]
+                    table_df = display_df[existing_columns].rename(columns=columns_mapping)
+                    
+                    st.dataframe(
+                        table_df,
+                        use_container_width=True,
+                        height=400
+                    )
+                    
+                    # Add download button for the ranking
+                    csv = table_df.to_csv(index=False)
+                    st.download_button(
+                        label="📥 Download Optimized Rule Order",
+                        data=csv,
+                        file_name=f"optimized_rules_session_{session_id}.csv",
+                        mime="text/csv"
+                    )
+                else:
+                    st.warning("No position data available in the ranking results")
                 
-                # Filter to only include columns that exist
-                existing_columns = [col for col in columns_to_show.keys() if col in display_df.columns]
-                table_df = display_df[existing_columns].rename(columns=columns_to_show)
+                # Enhanced visualization (only if we have position data)
+                if 'current_position' in df.columns and 'proposed_position' in df.columns:
+                    st.subheader("📊 Rule Position Optimization Chart")
+                    fig = px.scatter(
+                        df,
+                        x='current_position',
+                        y='proposed_position',
+                        size='hit_count' if 'hit_count' in df.columns else None,
+                        color='position_change' if 'position_change' in df.columns else None,
+                        hover_data=['rule_id', 'priority_score', 'category'] if all(col in df.columns for col in ['rule_id', 'priority_score', 'category']) else None,
+                        title='Rule Position Optimization',
+                        labels={
+                            'current_position': 'Current Position',
+                            'proposed_position': 'Optimized Position',
+                            'position_change': 'Improvement',
+                            'hit_count': 'Usage Frequency'
+                        }
+                    )
+                    
+                    max_pos = max(df['current_position'].max(), df['proposed_position'].max())
+                    fig.add_trace(px.line(x=[1, max_pos], y=[1, max_pos]).data[0])
+                    fig.data[-1].line.dash = 'dash'
+                    fig.data[-1].line.color = '#94a3b8'
+                    fig.data[-1].name = 'Reference'
+                    
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+            else:
+                st.info("No detailed comparison data available. The optimization was completed successfully.")
                 
-                st.dataframe(
-                    table_df,
-                    use_container_width=True,
-                    height=400
-                )
-                
-                # Add download button for the ranking
-                csv = table_df.to_csv(index=False)
-                st.download_button(
-                    label="📥 Download Optimized Rule Order",
-                    data=csv,
-                    file_name=f"optimized_rules_session_{session_id}.csv",
-                    mime="text/csv"
-                )
+            st.info(f"💡 **Performance Insight:** Optimized rule order can improve processing speed by approximately {comparison_data.get('improvement', 0):.1f}%")
     
     except Exception as e:
         st.error(f"Error loading visualization: {str(e)}")
-        import traceback
-        st.code(traceback.format_exc())
+        # Show a simplified view if the detailed data isn't available
+        st.info("Showing basic optimization results...")
+        st.metric("Performance Improvement", f"{comparison_data.get('improvement', 0):.1f}%")
+        st.metric("Total Rules Processed", comparison_data.get('rules_analyzed', 0))
     
     st.markdown('</div>', unsafe_allow_html=True)
-
+    
 def display_enhanced_metrics(metrics_data):
     """Display metrics with enhanced dark theme design"""
     cols = st.columns(len(metrics_data))

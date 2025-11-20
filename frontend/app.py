@@ -51,7 +51,7 @@ apply_custom_styles()
 # -----------------------------
 # 3️⃣ Render Header
 # -----------------------------
-render_header()
+#render_header()
 
 # -----------------------------
 # 4️⃣ System Check

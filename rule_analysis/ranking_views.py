@@ -11,96 +11,113 @@ from .supabase_utils import get_file_as_dataframe
 def is_admin(user):
     """FR05-03: Check if user has admin role"""
     return user.is_superuser or user.groups.filter(name='admin').exists()
-
 @api_view(['POST'])
 def generate_rule_ranking(request):
     """
     FR05-01 & FR05-02: Generate optimized rule ranking using REAL performance data - FIXED
     """
     try:
-        session_name = request.data.get('session_name', 'Rule Ranking Proposal')
-        rules_file_id = request.data.get('rules_file_id')
+        # Read inputs
+        session_name = request.data.get("session_name", "Rule Ranking Proposal")
+        rules_file_id = request.data.get("rules_file_id")
 
         print(f"🎯 Generating ranking with rules_file_id: {rules_file_id}")
         print(f"📦 Request data: {request.data}")
 
-        # Validate required parameters
-        if not rules_file_id:
-            return Response({'error': 'rules_file_id is required'}, status=400)
+        # ======================================================================================
+        # ✅ INSERTED VALIDATION BLOCK (AS REQUESTED)
+        # ======================================================================================
+        rules_file_id = request.data.get("rules_file_id")
+        session_name = request.data.get("session_name")
 
-        # Get real rules data from uploaded file
+        if not rules_file_id:
+            return Response({"error": "rules_file_id is required"}, status=400)
+
+        if not session_name:
+            return Response({"error": "session_name is required"}, status=400)
+
         try:
-            rules_file = UploadedFile.objects.get(id=rules_file_id, file_type='rules')
+            rules_file_id = int(rules_file_id)
+        except:
+            return Response({"error": "rules_file_id must be an integer"}, status=400)
+
+        try:
+            rules_file = UploadedFile.objects.get(id=rules_file_id, file_type="rules")
+        except UploadedFile.DoesNotExist:
+            return Response(
+                {"error": f"Rules file {rules_file_id} not found"},
+                status=404
+            )
+        # ======================================================================================
+
+        # Load rules file into dataframe
+        try:
             rules_df = get_file_as_dataframe(rules_file)
             print(f"📋 Loaded rules file: {rules_file.filename}, shape: {rules_df.shape}")
-            
-            # Debug: Show available columns
             print(f"🔍 Rules file columns: {list(rules_df.columns)}")
-            
-            # Ensure we have a rule_id column
-            if 'rule_id' not in rules_df.columns and 'id' in rules_df.columns:
-                rules_df['rule_id'] = rules_df['id']
-                print("🔄 Using 'id' column as rule_id")
-            elif 'rule_id' not in rules_df.columns:
-                return Response({
-                    'error': f'Rules file missing rule_id column. Available columns: {list(rules_df.columns)}'
-                }, status=400)
-                
-        except UploadedFile.DoesNotExist:
-            return Response({'error': f'Rules file with ID {rules_file_id} not found'}, status=404)
-        except Exception as e:
-            return Response(
-                {'error': f'Error reading rules file: {str(e)}'},
-                status=400
-            )
 
-        # Get real performance data from FR03 database
+            # Ensure rule_id exists
+            if "rule_id" not in rules_df.columns and "id" in rules_df.columns:
+                rules_df["rule_id"] = rules_df["id"]
+                print("🔄 Using 'id' column as rule_id")
+
+            elif "rule_id" not in rules_df.columns:
+                return Response({
+                    "error": f"Rules file missing rule_id column. Available: {list(rules_df.columns)}"
+                }, status=400)
+
+        except Exception as e:
+            return Response({
+                "error": f"Error reading rules file: {str(e)}"
+            }, status=400)
+
+        # Fetch real performance data from database
         performance_data = []
         rule_performances = RulePerformance.objects.all()
 
-        for rule_perf in rule_performances:
+        for rp in rule_performances:
             performance_data.append({
-                'rule_id': rule_perf.rule_id,
-                'hit_count': rule_perf.hit_count,
-                'effectiveness_ratio': rule_perf.effectiveness_ratio,
-                'last_triggered': rule_perf.last_triggered.isoformat() if rule_perf.last_triggered else None
+                "rule_id": rp.rule_id,
+                "hit_count": rp.hit_count,
+                "effectiveness_ratio": rp.effectiveness_ratio,
+                "last_triggered": rp.last_triggered.isoformat() if rp.last_triggered else None
             })
 
+        # If no performance data → fallback mock
         if not performance_data:
-            # If no performance data, create mock data for demonstration
             print("⚠️ No performance data found, using mock data for demo")
-            rule_ids = rules_df['rule_id'].unique()
-            
+            rule_ids = rules_df["rule_id"].unique()
+
             performance_data = []
-            for i, rule_id in enumerate(rule_ids[:20]):  # Limit to first 20 rules for demo
+            for i, rid in enumerate(rule_ids[:20]):
                 performance_data.append({
-                    'rule_id': str(rule_id),
-                    'hit_count': max(1, (i + 1) * 10),  # Mock data
-                    'effectiveness_ratio': 0.7 + (i * 0.02),
-                    'last_triggered': None
+                    "rule_id": str(rid),
+                    "hit_count": max(1, (i + 1) * 10),
+                    "effectiveness_ratio": 0.7 + (i * 0.02),
+                    "last_triggered": None
                 })
 
         performance_df = pd.DataFrame(performance_data)
         print(f"📊 Performance data shape: {performance_df.shape}")
 
-        # Generate ranking with REAL data
+        # Run ranking engine
         ranker = SmartRuleRanker()
         ranking_session = ranker.create_ranking_session(
             rules_df, performance_df, session_name
         )
 
-        # Response format that matches frontend expectations
+        # Final API response
         return Response({
-            'status': 'success',
-            'message': 'Rule ranking generated successfully!',
-            'session_id': ranking_session.id,
-            'improvement': ranking_session.performance_improvement,
-            'rules_analyzed': len(rules_df),
-            'ranking_session': {
-                'name': ranking_session.name,
-                'improvement': ranking_session.performance_improvement,
-                'status': ranking_session.status,
-                'created_at': ranking_session.created_at
+            "status": "success",
+            "message": "Rule ranking generated successfully!",
+            "session_id": ranking_session.id,
+            "improvement": ranking_session.performance_improvement,
+            "rules_analyzed": len(rules_df),
+            "ranking_session": {
+                "name": ranking_session.name,
+                "improvement": ranking_session.performance_improvement,
+                "status": ranking_session.status,
+                "created_at": ranking_session.created_at
             }
         })
 
@@ -109,9 +126,11 @@ def generate_rule_ranking(request):
         error_details = traceback.format_exc()
         print(f"🚨 Ranking generation error: {str(e)}")
         print(f"🔧 Traceback: {error_details}")
+
         return Response({
-            'error': f'Ranking generation failed: {str(e)}'
+            "error": f"Ranking generation failed: {str(e)}"
         }, status=400)
+
 
 @api_view(['GET'])
 def get_ranking_session(request, session_id):

@@ -14,27 +14,18 @@ from pathlib import Path
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
+# Load environment variables from .env
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
+# Build paths inside the project
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
-
-# SECURITY WARNING: keep the secret key used in production secret!
+# SECURITY SETTINGS
 SECRET_KEY = 'django-insecure-jve8yylun_%_-)0*4+ags)bj9fv(@&!rjgyk3fvs%h$lm#_1(0'
-
-# SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
-
 ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
 
-
-
-# Application definition
-
+# APPLICATION DEFINITION
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -46,16 +37,16 @@ INSTALLED_APPS = [
     'django_extensions',
     'threshold_tuning',
     'data_management',
-    # 'waf_analysis',
+    'corsheaders',
     'rule_analysis',
- 
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',  # must be at the top
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
-    #'django.middleware.csrf.CsrfViewMiddleware',
+    'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
@@ -70,6 +61,7 @@ TEMPLATES = [
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
+                'django.template.context_processors.debug',
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
@@ -80,52 +72,89 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'waf_project.wsgi.application'
 
+# CORS CONFIGURATION
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_CREDENTIALS = True
 
-# Database
-# https://docs.djangoproject.com/en/5.2/ref/settings/#databases
-
-# Use Supabase PostgreSQL if credentials are available, otherwise fallback to SQLite
+# DATABASE CONFIGURATION - SINGLE CONFIGURATION
+# Get all possible environment variables
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 SUPABASE_DB_URL = os.getenv("SUPABASE_DB_URL")
 SUPABASE_DB_PASSWORD = os.getenv("SUPABASE_DB_PASSWORD")
 SUPABASE_DB_HOST = os.getenv("SUPABASE_DB_HOST")
-SUPABASE_DB_NAME = os.getenv("SUPABASE_DB_NAME", "postgres")
-SUPABASE_DB_USER = os.getenv("SUPABASE_DB_USER", "postgres")
-SUPABASE_DB_PORT = os.getenv("SUPABASE_DB_PORT", "5432")
 
-if SUPABASE_DB_URL:
-    # Use Supabase PostgreSQL via connection string
+# Debug: Check what environment variables are available
+print("🔍 Database Configuration Debug:")
+print(f"SUPABASE_URL: {bool(SUPABASE_URL)}")
+print(f"SUPABASE_SERVICE_KEY: {bool(SUPABASE_SERVICE_KEY)}")
+print(f"SUPABASE_DB_URL: {bool(SUPABASE_DB_URL)}")
+print(f"SUPABASE_DB_PASSWORD: {bool(SUPABASE_DB_PASSWORD)}")
+print(f"SUPABASE_DB_HOST: {bool(SUPABASE_DB_HOST)}")
+
+# Priority 1: Use direct database connection parameters
+if SUPABASE_DB_HOST and SUPABASE_DB_PASSWORD:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
-            'NAME': SUPABASE_DB_NAME,
-            'USER': SUPABASE_DB_USER,
+            'NAME': os.getenv("SUPABASE_DB_NAME", "postgres"),
+            'USER': os.getenv("SUPABASE_DB_USER", "postgres"),
             'PASSWORD': SUPABASE_DB_PASSWORD,
             'HOST': SUPABASE_DB_HOST,
-            'PORT': SUPABASE_DB_PORT,
+            'PORT': os.getenv("SUPABASE_DB_PORT", "5432"),
             'OPTIONS': {
                 'sslmode': 'require',
             },
         }
     }
-    print("✅ Using Supabase PostgreSQL database")
-elif SUPABASE_DB_HOST and SUPABASE_DB_PASSWORD:
-    # Use Supabase PostgreSQL via individual settings
+    print("✅ Using Supabase PostgreSQL database (direct connection)")
+
+# Priority 2: Use Supabase URL and service key
+elif SUPABASE_URL and SUPABASE_SERVICE_KEY:
+    # Extract host from Supabase URL
+    host = SUPABASE_URL.replace('https://', '').split('.')[0] + '.supabase.co'
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
-            'NAME': SUPABASE_DB_NAME,
-            'USER': SUPABASE_DB_USER,
-            'PASSWORD': SUPABASE_DB_PASSWORD,
-            'HOST': SUPABASE_DB_HOST,
-            'PORT': SUPABASE_DB_PORT,
+            'NAME': 'postgres',
+            'USER': 'postgres',
+            'PASSWORD': SUPABASE_SERVICE_KEY,
+            'HOST': host,
+            'PORT': '5432',
             'OPTIONS': {
                 'sslmode': 'require',
             },
         }
     }
-    print("✅ Using Supabase PostgreSQL database")
+    print("✅ Using Supabase PostgreSQL database (via Supabase URL)")
+
+# Priority 3: Use database URL
+elif SUPABASE_DB_URL:
+    # Parse the database URL
+    if SUPABASE_DB_URL.startswith('postgresql://'):
+        # Simple parsing for common Supabase URL format
+        parts = SUPABASE_DB_URL.replace('postgresql://', '').split('@')
+        user_pass = parts[0].split(':')
+        host_port_db = parts[1].split('/')
+        host_port = host_port_db[0].split(':')
+        
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.postgresql',
+                'NAME': host_port_db[1],
+                'USER': user_pass[0],
+                'PASSWORD': user_pass[1],
+                'HOST': host_port[0],
+                'PORT': host_port[1] if len(host_port) > 1 else '5432',
+                'OPTIONS': {
+                    'sslmode': 'require',
+                },
+            }
+        }
+        print("✅ Using Supabase PostgreSQL database (via database URL)")
+
+# Fallback: Use SQLite
 else:
-    # Fallback to SQLite for local development
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
@@ -134,10 +163,7 @@ else:
     }
     print("⚠️ Using SQLite database (Supabase credentials not found in .env)")
 
-
-# Password validation
-# https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
-
+# PASSWORD VALIDATION
 AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
@@ -153,52 +179,34 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-
-# Internationalization
-# https://docs.djangoproject.com/en/5.2/topics/i18n/
-
+# INTERNATIONALIZATION
 LANGUAGE_CODE = 'en-us'
-
 TIME_ZONE = 'UTC'
-
 USE_I18N = True
-
 USE_TZ = True
 
-
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/5.2/howto/static-files/
-
+# STATIC FILES
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-# Default primary key field type
-# https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
-
+# DEFAULT AUTO FIELD
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-#MEDIA_URL = '/media/'
-#MEDIA_ROOT = BASE_DIR / 'uploads'
-INSTALLED_APPS += ["corsheaders"]
+# REST FRAMEWORK
+REST_FRAMEWORK = {
+    'DEFAULT_RENDERER_CLASSES': [
+        'rest_framework.renderers.JSONRenderer',
+    ],
+    'DEFAULT_PARSER_CLASSES': [
+        'rest_framework.parsers.JSONParser',
+        'rest_framework.parsers.MultiPartParser',
+        'rest_framework.parsers.FormParser',
+    ],
+}
 
-MIDDLEWARE = ["corsheaders.middleware.CorsMiddleware"] + MIDDLEWARE
-
-# Dev mode ke liye sab allow karo
-CORS_ALLOW_ALL_ORIGINS = True
-
-
-
-from pathlib import Path
-from dotenv import load_dotenv
-
-# Load environment variables from project root .env for local dev
-load_dotenv(Path(__file__).resolve().parent.parent / ".env")
-
-# Use the centralized server-side Supabase client defined in `supabase_client.py`.
-# This keeps all Supabase credential usage in one place and avoids creating
-# a second client in settings (reduces confusion and accidental exposure).
+# SUPABASE CLIENT FOR FILE STORAGE
 try:
     from supabase_client import supabase as supabase_client
-    # Expose a `supabase` name for backward compatibility in other modules
     supabase = supabase_client
     print("✅ Supabase client imported from supabase_client.py")
 except Exception as e:

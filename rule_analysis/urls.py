@@ -43,5 +43,5 @@ urlpatterns = [
     path('learning-mode/start/', start_learning_mode, name='start-learning-mode'),
     path('learning-mode/status/<int:learning_session_id>/', get_learning_mode_status, name='get-learning-mode-status'),
     path('whitelist/export-csv/', export_whitelist_csv, name='export-whitelist-csv'),
-    path('false-positives/dashboard/', get_false_positive_dashboard, name='false-positive-dashboard'),
+    path('false-positive-dashboard/', get_false_positive_dashboard, name='false-positive-dashboard'),
 ]
