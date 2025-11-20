@@ -59,9 +59,8 @@ def render_rule_analysis():
                 rules_uploaded = next((f for f in uploaded_files if f.get('filename') == selected_rules['name'] and f.get('file_type') in ['rules']), None)
                 logs_uploaded = next((f for f in uploaded_files if f.get('filename') == selected_logs['name'] and f.get('file_type') in ['traffic', 'logs']), None)
 
-                if not rules_uploaded or not logs_uploaded:
-                    st.error("❌ UploadedFile metadata not found for selected files. Please upload them via File Management first.")
-                else:
+                # Prefer session-based analysis when UploadedFile metadata exists in backend DB
+                if rules_uploaded and logs_uploaded:
                     # create backend session
                     session_name = f"{selected_rules['name']} + {selected_logs['name']}"
                     create_resp = create_analysis_session(session_name, rules_uploaded['id'], logs_uploaded['id'])
@@ -80,6 +79,18 @@ def render_rule_analysis():
                                 display_analysis_results(response.json())
                             else:
                                 st.error("❌ Analysis failed - check backend connection or logs")
+                else:
+                    # Fallback: send file contents directly to backend analyze endpoint
+                    try:
+                        response = analyze_rules(rules_content, logs_content, analysis_types_abbr)
+                        if response and response.status_code == 200:
+                            st.success("✅ Analysis completed (content-based)!")
+                            display_analysis_results(response.json())
+                        else:
+                            err = response.text if response is not None else 'No response from server'
+                            st.error(f"❌ Analysis failed (content-based): {err}")
+                    except Exception as e:
+                        st.error(f"❌ Analysis failed (content-based): {str(e)}")
         else:
             st.info("👆 Click the button above to start the security analysis with the selected files and analysis types.")
     else:

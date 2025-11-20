@@ -32,6 +32,7 @@ def get_file_from_supabase(uploaded_file):
         file_content = supabase.storage.from_(bucket_name).download(uploaded_file.supabase_path)
         return file_content
     except Exception as e:
+        # Raise the exception but include context so callers can attempt a fallback
         raise Exception(f"Failed to fetch file {uploaded_file.filename} from Supabase: {str(e)}")
 
 
@@ -45,15 +46,38 @@ def get_file_as_dataframe(uploaded_file):
     Returns:
         pd.DataFrame: File content as DataFrame
     """
-    file_content = get_file_from_supabase(uploaded_file)
-    
-    # Convert bytes to string if needed
-    if isinstance(file_content, bytes):
-        file_content = file_content.decode('utf-8')
-    
-    # Read CSV from string
-    df = pd.read_csv(io.StringIO(file_content))
-    return df
+    try:
+        file_content = get_file_from_supabase(uploaded_file)
+
+        # Convert bytes to string if needed
+        if isinstance(file_content, bytes):
+            file_content = file_content.decode('utf-8')
+
+        # Read CSV from string
+        df = pd.read_csv(io.StringIO(file_content))
+        return df
+
+    except Exception as e:
+        # Supabase fetch failed — try local fallback using upload filename from the repo 'uploads' folder
+        import os
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        local_paths = [
+            os.path.join(project_root, 'uploads', uploaded_file.filename),
+            os.path.join(project_root, 'uploads', 'uploads', uploaded_file.filename),
+            os.path.join(project_root, uploaded_file.filename),
+        ]
+
+        for p in local_paths:
+            try:
+                if os.path.exists(p):
+                    with open(p, 'r', encoding='utf-8') as fh:
+                        file_text = fh.read()
+                    return pd.read_csv(io.StringIO(file_text))
+            except Exception:
+                continue
+
+        # If fallback failed, re-raise the original exception (with context)
+        raise Exception(f"Could not load file '{uploaded_file.filename}' from Supabase or local fallbacks: {str(e)}")
 
 
 def get_file_as_string(uploaded_file):

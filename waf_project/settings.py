@@ -47,7 +47,7 @@ INSTALLED_APPS = [
     'data_management',
     # 'waf_analysis',
     'rule_analysis',
-    'false_positive_reduction',
+ 
 ]
 
 MIDDLEWARE = [
@@ -175,23 +175,27 @@ STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-#MEDIA_URL = '/media/'
-#MEDIA_ROOT = BASE_DIR / 'uploads'
+# Media files (user-uploaded content)
+# Ensure MEDIA_URL is a non-empty path to avoid Django adding a catch-all static
+# serving pattern in development which can cause the root URL to be captured.
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'uploads'
 
 
-import os
 from pathlib import Path
 from dotenv import load_dotenv
-from supabase import create_client
 
-# Load environment variables
+# Load environment variables from project root .env for local dev
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_ANON_KEY")
-
-if SUPABASE_URL and SUPABASE_KEY:
-    supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-    print("✅ Supabase connected successfully!")
-else:
-    print("⚠️ Supabase credentials not found in .env")
+# Use the centralized server-side Supabase client defined in `supabase_client.py`.
+# This keeps all Supabase credential usage in one place and avoids creating
+# a second client in settings (reduces confusion and accidental exposure).
+try:
+    from supabase_client import supabase as supabase_client
+    # Expose a `supabase` name for backward compatibility in other modules
+    supabase = supabase_client
+    print("✅ Supabase client imported from supabase_client.py")
+except Exception as e:
+    supabase = None
+    print(f"⚠️ Could not import Supabase client from supabase_client.py: {e}")

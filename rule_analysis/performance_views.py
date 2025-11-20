@@ -1,4 +1,3 @@
-# rule_analysis/performance_views.py
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from django.http import JsonResponse
@@ -6,17 +5,19 @@ import pandas as pd
 from .models import RulePerformance, PerformanceSnapshot
 from .performance_analyzer import RulePerformanceProfiler
 from data_management.models import UploadedFile
-from .supabase_utils import get_file_as_dataframe  # ADD THIS
+from .supabase_utils import get_file_as_dataframe
 
 @api_view(['POST'])
 def analyze_rule_performance(request):
     """
-    FR03: Analyze rule performance from traffic data
+    FR03: Analyze rule performance from traffic data - FIXED
     """
     try:
         traffic_file_id = request.data.get('traffic_file_id')
-        rules_file_id = request.data.get('rules_file_id')  # ADDED: Get rules file ID
+        rules_file_id = request.data.get('rules_file_id')
         snapshot_name = request.data.get('snapshot_name', 'Performance Analysis')
+        
+        print(f"🎯 Performance analysis request: traffic={traffic_file_id}, rules={rules_file_id}")
         
         # Validate required files
         if not traffic_file_id:
@@ -25,26 +26,42 @@ def analyze_rule_performance(request):
             return Response({'error': 'rules_file_id is required'}, status=400)
         
         # Get traffic file from Supabase
-        traffic_file = UploadedFile.objects.get(id=traffic_file_id, file_type__in=['traffic', 'logs'])
-        traffic_data = get_file_as_dataframe(traffic_file)
+        try:
+            traffic_file = UploadedFile.objects.get(id=traffic_file_id, file_type__in=['traffic', 'logs'])
+            traffic_data = get_file_as_dataframe(traffic_file)
+            print(f"📊 Loaded traffic file: {traffic_file.filename}, shape: {traffic_data.shape}")
+        except UploadedFile.DoesNotExist:
+            return Response({'error': f'Traffic file with ID {traffic_file_id} not found'}, status=404)
+        except Exception as e:
+            return Response({'error': f'Error reading traffic file: {str(e)}'}, status=400)
         
         # Get rules file from Supabase
-        rules_file = UploadedFile.objects.get(id=rules_file_id, file_type='rules')
-        rules_data = get_file_as_dataframe(rules_file)
+        try:
+            rules_file = UploadedFile.objects.get(id=rules_file_id, file_type='rules')
+            rules_data = get_file_as_dataframe(rules_file)
+            print(f"📋 Loaded rules file: {rules_file.filename}, shape: {rules_data.shape}")
+        except UploadedFile.DoesNotExist:
+            return Response({'error': f'Rules file with ID {rules_file_id} not found'}, status=404)
+        except Exception as e:
+            return Response({'error': f'Error reading rules file: {str(e)}'}, status=400)
         
         # Validate required columns in traffic data
-        required_traffic_columns = ['rule_id', 'timestamp', 'action']
+        required_traffic_columns = ['rule_id']
         missing_columns = [col for col in required_traffic_columns if col not in traffic_data.columns]
         if missing_columns:
             return Response({
-                'error': f'Traffic file missing required columns: {missing_columns}'
+                'error': f'Traffic file missing required columns: {missing_columns}. Available columns: {list(traffic_data.columns)}'
             }, status=400)
         
         # Validate required columns in rules data
-        if 'rule_id' not in rules_data.columns:
+        if 'rule_id' not in rules_data.columns and 'id' not in rules_data.columns:
             return Response({
-                'error': 'Rules file missing required column: rule_id'
+                'error': f'Rules file missing rule_id column. Available columns: {list(rules_data.columns)}'
             }, status=400)
+        
+        # Use 'id' column if 'rule_id' doesn't exist
+        if 'rule_id' not in rules_data.columns and 'id' in rules_data.columns:
+            rules_data['rule_id'] = rules_data['id']
         
         # Analyze performance with REAL data
         profiler = RulePerformanceProfiler()
@@ -66,9 +83,11 @@ def analyze_rule_performance(request):
             'performance_data': performance_data
         })
         
-    except UploadedFile.DoesNotExist:
-        return Response({'error': 'File not found'}, status=404)
     except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"🚨 Performance analysis error: {str(e)}")
+        print(f"🔧 Traceback: {error_details}")
         return Response({
             'error': f'Performance analysis failed: {str(e)}'
         }, status=400)

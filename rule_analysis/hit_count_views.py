@@ -1,12 +1,3 @@
-# rule_analysis/hit_count_views.py
-from rest_framework.decorators import api_view
-from rest_framework.response import Response
-import pandas as pd
-from .hit_counter import RuleHitCounter
-from .models import RulePerformance
-from data_management.models import UploadedFile
-from .supabase_utils import get_file_as_dataframe
-# rule_analysis/hit_count_views.py
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 import pandas as pd
@@ -18,35 +9,41 @@ from .supabase_utils import get_file_as_dataframe
 @api_view(['POST'])
 def update_rule_hit_counts(request):
     """
-    FR03-01, FR03-02 & FR03-03: Complete performance profiling
+    FR03-01, FR03-02 & FR03-03: Complete performance profiling - FIXED
     """
     try:
-        # Get traffic file ID from request
+        # Get parameters from request
         traffic_file_id = request.data.get('traffic_file_id')
+        rules_file_id = request.data.get('rules_file_id')
+        update_type = request.data.get('update_type', 'incremental')
         
+        print(f"🔄 Processing hit counts update: traffic={traffic_file_id}, rules={rules_file_id}")
+        
+        # Validate required parameters
         if not traffic_file_id:
-            return Response({'error': 'traffic_file_id is required'}, status=400)
-        
-        print(f"Processing traffic file ID: {traffic_file_id}")
+            # Try to pick the most recent traffic file as a sensible default
+            latest = UploadedFile.objects.filter(file_type__in=['traffic', 'logs']).order_by('-uploaded_at').first()
+            if latest:
+                traffic_file_id = latest.id
+            else:
+                return Response({'error': 'traffic_file_id is required and no traffic files are available'}, status=400)
         
         # Load traffic data from Supabase
         try:
             traffic_file = UploadedFile.objects.get(id=traffic_file_id, file_type__in=['traffic', 'logs'])
             traffic_data = get_file_as_dataframe(traffic_file)
-            print(f"Loaded traffic file: {traffic_file.filename} from Supabase")
+            print(f"📊 Loaded traffic file: {traffic_file.filename}, shape: {traffic_data.shape}")
             
             # Validate required columns in traffic data
-            required_columns = ['rule_id', 'timestamp', 'action']
-            missing_columns = [col for col in required_columns if col not in traffic_data.columns]
-            if missing_columns:
+            if 'rule_id' not in traffic_data.columns:
                 return Response({
-                    'error': f'Traffic file missing required columns: {missing_columns}'
+                    'error': f'Traffic file missing required column: rule_id. Available columns: {list(traffic_data.columns)}'
                 }, status=400)
                 
         except UploadedFile.DoesNotExist:
-            return Response({'error': 'Traffic file not found'}, status=404)
+            return Response({'error': f'Traffic file with ID {traffic_file_id} not found'}, status=404)
         except Exception as e:
-            return Response({'error': f'Error reading traffic file from Supabase: {str(e)}'}, status=400)
+            return Response({'error': f'Error reading traffic file: {str(e)}'}, status=400)
         
         # Process the data
         hit_counter = RuleHitCounter()
@@ -77,10 +74,14 @@ def update_rule_hit_counts(request):
             },
             'hit_details': hit_result['hit_summary'],
             'performance_metrics': metrics_result,
-            'flagged_rules': flagged_rules  # NEW: FR03-03 data
+            'flagged_rules': flagged_rules
         })
         
     except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"🚨 Hit counts update error: {str(e)}")
+        print(f"🔧 Traceback: {error_details}")
         return Response({'error': f'Update failed: {str(e)}'}, status=500)
 
 @api_view(['GET'])
@@ -93,14 +94,14 @@ def get_hit_count_dashboard(request):
         
         # Get basic stats
         hit_stats = hit_counter.get_rule_hit_stats()
-        total_hits = sum(rule['hit_count'] for rule in hit_stats)
-        total_rules = len(hit_stats)
+        total_hits = sum(rule['hit_count'] for rule in hit_stats) if hit_stats else 0
+        total_rules = len(hit_stats) if hit_stats else 0
         avg_hits_per_rule = total_hits / total_rules if total_rules > 0 else 0
         
         # Get performance metrics
         rules_with_metrics = RulePerformance.objects.all().values(
             'rule_id', 'hit_count', 'match_frequency', 'effectiveness_ratio',
-            'is_rarely_used', 'is_redundant', 'is_high_performance'  # NEW: FR03-03 flags
+            'is_rarely_used', 'is_redundant', 'is_high_performance'
         )
         
         # Enhanced top rules with metrics and flags
@@ -117,9 +118,9 @@ def get_hit_count_dashboard(request):
             top_rules.append({
                 'rule_id': rule['rule_id'],
                 'hit_count': rule['hit_count'],
-                'match_frequency': f"{rule['match_frequency']:.2%}",
-                'effectiveness_ratio': f"{rule['effectiveness_ratio']:.0%}",
-                'flags': flags  # NEW: FR03-03 flags
+                'match_frequency': f"{rule['match_frequency']:.2%}" if rule['match_frequency'] else "0%",
+                'effectiveness_ratio': f"{rule['effectiveness_ratio']:.0%}" if rule['effectiveness_ratio'] else "0%",
+                'flags': flags
             })
         
         # Get flagged rules summary
@@ -134,7 +135,7 @@ def get_hit_count_dashboard(request):
                 'total_rules_tracked': total_rules,
                 'total_hits_recorded': total_hits,
                 'average_hits_per_rule': round(avg_hits_per_rule, 2),
-                'flagged_rules_summary': flagged_summary  # NEW: FR03-03 summary
+                'flagged_rules_summary': flagged_summary
             },
             'top_performing_rules': top_rules,
             'all_rules': list(rules_with_metrics)
@@ -159,8 +160,8 @@ def get_rule_hit_details(request, rule_id):
         try:
             rule_with_metrics = RulePerformance.objects.get(rule_id=rule_id)
             performance_data = {
-                'match_frequency': f"{rule_with_metrics.match_frequency:.2%}",
-                'effectiveness_ratio': f"{rule_with_metrics.effectiveness_ratio:.0%}",
+                'match_frequency': f"{rule_with_metrics.match_frequency:.2%}" if rule_with_metrics.match_frequency else "0%",
+                'effectiveness_ratio': f"{rule_with_metrics.effectiveness_ratio:.0%}" if rule_with_metrics.effectiveness_ratio else "0%",
                 'average_evaluation_time': rule_with_metrics.average_evaluation_time,
                 'flags': {
                     'is_rarely_used': rule_with_metrics.is_rarely_used,
