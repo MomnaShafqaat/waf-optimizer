@@ -29,7 +29,8 @@ SECRET_KEY = 'django-insecure-jve8yylun_%_-)0*4+ags)bj9fv(@&!rjgyk3fvs%h$lm#_1(0
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
+
 
 
 # Application definition
@@ -175,11 +176,15 @@ STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# Media files (user-uploaded content)
-# Ensure MEDIA_URL is a non-empty path to avoid Django adding a catch-all static
-# serving pattern in development which can cause the root URL to be captured.
-MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'uploads'
+#MEDIA_URL = '/media/'
+#MEDIA_ROOT = BASE_DIR / 'uploads'
+INSTALLED_APPS += ["corsheaders"]
+
+MIDDLEWARE = ["corsheaders.middleware.CorsMiddleware"] + MIDDLEWARE
+
+# Dev mode ke liye sab allow karo
+CORS_ALLOW_ALL_ORIGINS = True
+
 
 
 from pathlib import Path

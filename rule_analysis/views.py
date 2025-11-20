@@ -29,59 +29,6 @@ def _flatten_relationships(relationships_dict):
         flattened.extend(rel_list)
     return flattened
 
-def _get_fallback_response(rules_file_id, traffic_file_id, analysis_types):
-    """Provide fallback response if analysis fails"""
-    print("Using fallback response")
-    return Response({
-        'status': 'success',
-        'message': 'Rule analysis completed (fallback mode)!',
-        'data': {
-            'rules_file_id': rules_file_id,
-            'traffic_file_id': traffic_file_id,
-            'analysis_types': analysis_types,
-            'total_rules_analyzed': 12,
-            'relationships_found': 4,
-            'ai_available': False,
-            'relationships': [
-                {
-                    'rule_a': '1001',
-                    'rule_b': '1014',
-                    'relationship_type': 'SHD',
-                    'confidence': 0.85,
-                    'description': 'Rule 1001 shadows Rule 1014 - both detect SQL injection',
-                    'evidence_count': 5,
-                    'conflicting_fields': {'attack_type': 'Both rules use: SQL Injection'}
-                },
-                {
-                    'rule_a': '1002', 
-                    'rule_b': '1015',
-                    'relationship_type': 'RXD',
-                    'confidence': 0.92,
-                    'description': 'Rules 1002 and 1015 are redundant - both detect XSS',
-                    'evidence_count': 8,
-                    'conflicting_fields': {'attack_type': 'Both rules use: XSS'}
-                }
-            ],
-            'recommendations': [
-                {
-                    'type': 'Remove Shadowed Rules',
-                    'description': 'Remove Rule 1014 as it is shadowed by Rule 1001',
-                    'impact': 'Improve performance without reducing security'
-                },
-                {
-                    'type': 'Merge Redundant Rules', 
-                    'description': 'Merge Rules 1002 and 1015 into a single rule',
-                    'impact': 'Reduce rule complexity'
-                }
-            ],
-            'analysis_summary': {
-                'shd_count': 1,
-                'rxd_count': 1,
-                'total_rules': 12
-            }
-        }
-    })
-
 @api_view(['POST'])
 def analyze_rules(request):
     """Enhanced rule analysis endpoint with AI integration - accepts file content"""
@@ -106,7 +53,7 @@ def analyze_rules(request):
         elif request.FILES:
             print("Processing files from multipart/form-data...")
             rules_file = request.FILES.get('rules_file')
-            logs_file = request.FILES.get('logs_file')  # Changed from traffic_file to logs_file
+            logs_file = request.FILES.get('logs_file')  
             analysis_types = request.data.get('analysis_types', ['SHD', 'RXD'])
             
             print(f"Received files: rules_file={rules_file.name if rules_file else None}, logs_file={logs_file.name if logs_file else None}")
@@ -192,6 +139,7 @@ def analyze_rules(request):
                         session=session,
                         rule_a=rel.get('rule_a'),
                         rule_b=rel.get('rule_b'),
+                        
                         relationship_type=rel.get('relationship_type'),
                         confidence=rel.get('confidence', 0),
                         description=rel.get('description', ''),
@@ -199,29 +147,26 @@ def analyze_rules(request):
                         conflicting_fields=rel.get('conflicting_fields', {})
                     )
             
-            # Prepare response data
+            # Prepare response data in the format expected by frontend
             response_data = {
-                'session_id': session.id,
-                'total_rules_analyzed': analysis_results.get('total_rules', 0),
-                'relationships_found': analysis_results.get('total_relationships', 0),
-                'relationships': _flatten_relationships(analysis_results.get('relationships', {})),
+                'total_rules': analysis_results.get('total_rules', 0),
+                'total_relationships': analysis_results.get('total_relationships', 0),
+                'relationships': analysis_results.get('relationships', {}),
+                'shd_count': analysis_results.get('shd_count', 0),
+                'rxd_count': analysis_results.get('rxd_count', 0),
+                'sub_count': analysis_results.get('sub_count', 0),
+                'cor_count': analysis_results.get('cor_count', 0),
                 'recommendations': analysis_results.get('recommendations', []),
+                'sample_rules': analysis_results.get('sample_rules', []),
                 'ai_available': analysis_results.get('ai_available', False),
-                'analysis_summary': {
-                    'shd_count': analysis_results.get('shd_count', 0),
-                    'rxd_count': analysis_results.get('rxd_count', 0),
-                    'total_rules': analysis_results.get('total_rules', 0)
-                }
+                'ai_suggestions': analysis_results.get('ai_suggestions', {})
             }
             
-            # Add AI suggestions if available
-            if analysis_results.get('ai_available'):
-                response_data['ai_suggestions'] = analysis_results.get('ai_suggestions', {})
-                response_data['ai_analysis_summary'] = analysis_results.get('ai_analysis_summary', {})
+            # Add AI error if present
+            if analysis_results.get('ai_error'):
+                response_data['ai_error'] = analysis_results.get('ai_error')
             
             return Response({
-                'status': 'success',
-                'message': 'Rule analysis completed successfully with AI optimization!',
                 'data': response_data
             })
             

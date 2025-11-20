@@ -100,10 +100,11 @@ def render_rule_analysis():
 
 
 def display_analysis_results(results):
-    """Display rule analysis results with enhanced design"""
+    """Display rule analysis results with enhanced design including AI suggestions"""
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.header("📊 Analysis Results")
     
+    # Handle different response formats
     if 'data' in results:
         data = results['data']
     else:
@@ -111,26 +112,42 @@ def display_analysis_results(results):
     
     # Enhanced Metrics Display
     metrics_data = [
-        {"label": "Rules Analyzed", "value": data.get('total_rules_analyzed', 0)},
-        {"label": "Relationships Found", "value": data.get('relationships_found', 0)},
-        {"label": "Shadowing Rules", "value": len([r for r in data.get('relationships', []) if r.get('relationship_type') == 'SHD'])},
-        {"label": "Redundant Rules", "value": len([r for r in data.get('relationships', []) if r.get('relationship_type') == 'RXD'])}
+        {"label": "Total Rules", "value": data.get('total_rules', 0)},
+        {"label": "Relationships", "value": data.get('total_relationships', 0)},
+        {"label": "Shadowing", "value": data.get('shd_count', 0)},
+        {"label": "Redundant", "value": data.get('rxd_count', 0)},
+        {"label": "Correlated", "value": data.get('cor_count', 0)},
+        {"label": "AI Enhanced", "value": "✅" if data.get('ai_available') else "❌"}
     ]
     
     display_enhanced_metrics(metrics_data)
     
+    # Display AI suggestions if available
+    if data.get('ai_available') and data.get('ai_suggestions'):
+        display_ai_suggestions(data['ai_suggestions'])
+    elif data.get('ai_available') is False:
+        st.warning("🤖 AI enhancement was not available for this analysis")
+        if data.get('ai_error'):
+            st.error(f"AI Error: {data.get('ai_error')}")
+    
     # Relationships
-    relationships = data.get('relationships', [])
-    if relationships:
+    relationships_data = data.get('relationships', {})
+    
+    if relationships_data and data.get('total_relationships', 0) > 0:
         st.subheader("🔍 Rule Relationships")
-        for rel in relationships:
-            with st.expander(f"🛡️ Rule {rel.get('rule_a')} → Rule {rel.get('rule_b')} ({rel.get('relationship_type')})"):
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.write(f"**Confidence:** {rel.get('confidence', 'N/A')}")
-                with col2:
-                    st.write(f"**Evidence:** {rel.get('evidence_count', 'N/A')} matches")
-                st.write(f"**Description:** {rel.get('description', 'No description')}")
+        
+        # Handle both list and dict formats for relationships
+        if isinstance(relationships_data, list):
+            # Direct list of relationships
+            for rel in relationships_data:
+                display_relationship_item(rel)
+        elif isinstance(relationships_data, dict):
+            # Organized by relationship type
+            for rel_type, rel_list in relationships_data.items():
+                if rel_list and isinstance(rel_list, list):
+                    st.markdown(f"**{get_relationship_name(rel_type)}**")
+                    for rel in rel_list:
+                        display_relationship_item(rel)
     
     # Recommendations
     recommendations = data.get('recommendations', [])
@@ -141,7 +158,109 @@ def display_analysis_results(results):
             st.write(f"*Impact:* {rec.get('impact', 'Not specified')}")
             st.markdown("---")
     
+    # Show sample rules if available
+    sample_rules = data.get('sample_rules', [])
+    if sample_rules:
+        with st.expander("📋 Sample Rules Analyzed"):
+            st.write(f"First {len(sample_rules)} rules: {', '.join(map(str, sample_rules))}")
+    
     st.markdown('</div>', unsafe_allow_html=True)
+
+def display_relationship_item(rel):
+    """Display individual relationship item"""
+    rel_type = rel.get('relationship_type', 'UNK')
+    rule_a = rel.get('rule_a', 'N/A')
+    rule_b = rel.get('rule_b', 'N/A')
+    subsuming_rule = rel.get('subsuming_rule')
+    subsumed_rule = rel.get('subsumed_rule')
+    
+    # Handle different relationship types
+    if subsuming_rule and subsumed_rule:
+        # Subsumption relationship
+        title = f"🔄 Rule {subsuming_rule} subsumes Rule {subsumed_rule}"
+    else:
+        # Standard relationship
+        title = f"🛡️ Rule {rule_a} → Rule {rule_b} ({rel_type})"
+    
+    with st.expander(title):
+        col1, col2 = st.columns(2)
+        with col1:
+            confidence = rel.get('confidence')
+            if confidence is not None:
+                st.write(f"**Confidence:** {confidence:.3f}" if isinstance(confidence, (int, float)) else f"**Confidence:** {confidence}")
+            
+            jaccard = rel.get('jaccard')
+            if jaccard is not None:
+                st.write(f"**Jaccard:** {jaccard:.3f}")
+                
+        with col2:
+            evidence_count = rel.get('evidence_count')
+            if evidence_count is not None:
+                st.write(f"**Evidence:** {evidence_count} matches")
+            
+            lift = rel.get('lift')
+            if lift is not None:
+                st.write(f"**Lift:** {lift:.2f}")
+        
+        description = rel.get('description', 'No description available')
+        st.write(f"**Description:** {description}")
+
+def display_ai_suggestions(ai_suggestions):
+    """Display AI-generated optimization suggestions"""
+    st.subheader("🤖 AI Optimization Suggestions")
+    
+    # Redundant rules suggestions
+    if ai_suggestions.get('redundant'):
+        st.markdown("#### 🔄 Redundant Rule Optimizations")
+        for i, suggestion in enumerate(ai_suggestions['redundant']):
+            with st.expander(f"Redundant Rules Optimization #{i+1}"):
+                display_ai_suggestion_details(suggestion)
+    
+    # Shadowed rules suggestions
+    if ai_suggestions.get('shadowed'):
+        st.markdown("#### 🎯 Shadowed Rule Optimizations")
+        for i, suggestion in enumerate(ai_suggestions['shadowed']):
+            with st.expander(f"Shadowing Optimization #{i+1}"):
+                display_ai_suggestion_details(suggestion)
+    
+    # Correlated rules suggestions  
+    if ai_suggestions.get('correlated'):
+        st.markdown("#### 🔗 Correlated Rule Optimizations")
+        for i, suggestion in enumerate(ai_suggestions['correlated']):
+            with st.expander(f"Correlation Optimization #{i+1}"):
+                display_ai_suggestion_details(suggestion)
+
+def display_ai_suggestion_details(suggestion):
+    """Display details of an AI suggestion"""
+    col1, col2 = st.columns(2)
+    with col1:
+        st.write(f"**Action:** `{suggestion.get('action', 'N/A')}`")
+        st.write(f"**Security Impact:** {suggestion.get('security_impact', 'N/A')}")
+    with col2:
+        st.write(f"**Performance:** {suggestion.get('performance_improvement', 'N/A')}")
+    
+    st.markdown("**Optimized Rule:**")
+    st.code(suggestion.get('optimized_rule', 'No rule provided'), language='text')
+    
+    st.markdown("**Explanation:**")
+    st.write(suggestion.get('explanation', 'No explanation provided'))
+    
+    st.markdown("**Implementation Steps:**")
+    steps = suggestion.get('implementation_steps', [])
+    if steps:
+        for i, step in enumerate(steps, 1):
+            st.write(f"{i}. {step}")
+
+def get_relationship_name(rel_type):
+    """Convert relationship type code to readable name"""
+    names = {
+        'SHD': 'Shadowing Relationships',
+        'RXD': 'Redundant Rules', 
+        'COR': 'Correlated Rules',
+        'SUB': 'Subsumption Relationships',
+        'GEN': 'Generalization Relationships'
+    }
+    return names.get(rel_type, rel_type)
 
 def display_enhanced_metrics(metrics_data):
     """Display metrics with enhanced dark theme design"""

@@ -9,6 +9,10 @@ from supabase import create_client
 from dotenv import load_dotenv
 from io import StringIO
 
+load_dotenv()
+supabase = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_SERVICE_ROLE_KEY"))
+
+
 @api_view(['POST'])
 def delete_threshold_suggestion(request, suggestion_id):
     """Delete a threshold suggestion"""
