@@ -11,6 +11,10 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -25,7 +29,8 @@ SECRET_KEY = 'django-insecure-jve8yylun_%_-)0*4+ags)bj9fv(@&!rjgyk3fvs%h$lm#_1(0
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["127.0.0.1", "localhost"]
+
 
 
 # Application definition
@@ -50,7 +55,7 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
+    #'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
@@ -79,12 +84,55 @@ WSGI_APPLICATION = 'waf_project.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+# Use Supabase PostgreSQL if credentials are available, otherwise fallback to SQLite
+SUPABASE_DB_URL = os.getenv("SUPABASE_DB_URL")
+SUPABASE_DB_PASSWORD = os.getenv("SUPABASE_DB_PASSWORD")
+SUPABASE_DB_HOST = os.getenv("SUPABASE_DB_HOST")
+SUPABASE_DB_NAME = os.getenv("SUPABASE_DB_NAME", "postgres")
+SUPABASE_DB_USER = os.getenv("SUPABASE_DB_USER", "postgres")
+SUPABASE_DB_PORT = os.getenv("SUPABASE_DB_PORT", "5432")
+
+if SUPABASE_DB_URL:
+    # Use Supabase PostgreSQL via connection string
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': SUPABASE_DB_NAME,
+            'USER': SUPABASE_DB_USER,
+            'PASSWORD': SUPABASE_DB_PASSWORD,
+            'HOST': SUPABASE_DB_HOST,
+            'PORT': SUPABASE_DB_PORT,
+            'OPTIONS': {
+                'sslmode': 'require',
+            },
+        }
     }
-}
+    print("✅ Using Supabase PostgreSQL database")
+elif SUPABASE_DB_HOST and SUPABASE_DB_PASSWORD:
+    # Use Supabase PostgreSQL via individual settings
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': SUPABASE_DB_NAME,
+            'USER': SUPABASE_DB_USER,
+            'PASSWORD': SUPABASE_DB_PASSWORD,
+            'HOST': SUPABASE_DB_HOST,
+            'PORT': SUPABASE_DB_PORT,
+            'OPTIONS': {
+                'sslmode': 'require',
+            },
+        }
+    }
+    print("✅ Using Supabase PostgreSQL database")
+else:
+    # Fallback to SQLite for local development
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
+    print("⚠️ Using SQLite database (Supabase credentials not found in .env)")
 
 
 # Password validation
@@ -130,3 +178,28 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 #MEDIA_URL = '/media/'
 #MEDIA_ROOT = BASE_DIR / 'uploads'
+INSTALLED_APPS += ["corsheaders"]
+
+MIDDLEWARE = ["corsheaders.middleware.CorsMiddleware"] + MIDDLEWARE
+
+# Dev mode ke liye sab allow karo
+CORS_ALLOW_ALL_ORIGINS = True
+
+
+
+import os
+from pathlib import Path
+from dotenv import load_dotenv
+from supabase import create_client
+
+# Load environment variables
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_ANON_KEY")
+
+if SUPABASE_URL and SUPABASE_KEY:
+    supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+    print("✅ Supabase connected successfully!")
+else:
+    print("⚠️ Supabase credentials not found in .env")

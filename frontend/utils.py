@@ -5,6 +5,8 @@ import streamlit as st
 # API URLs
 API_URL = "http://127.0.0.1:8000/api/files/"
 RULE_ANALYSIS_API_URL = "http://127.0.0.1:8000/api/analyze/"
+# Sessions endpoint (RuleAnalysisSession ViewSet registered as 'sessions')
+SESSIONS_API_URL = "http://127.0.0.1:8000/api/sessions/"
 RANKING_API_URL = "http://127.0.0.1:8000/api/ranking/generate/"
 RANKING_COMPARISON_URL = "http://127.0.0.1:8000/api/ranking/comparison/"
 HIT_COUNTS_UPDATE_URL = "http://127.0.0.1:8000/api/hit-counts/update/"
@@ -34,17 +36,53 @@ def get_files_data():
     except:
         return []
 
-def analyze_rules(rules_file_id, traffic_file_id, analysis_types):
-    """Run rule analysis"""
-    analysis_data = {
-        'rules_file_id': rules_file_id,
-        'traffic_file_id': traffic_file_id,
-        'analysis_types': [atype[:3].upper() for atype in analysis_types]
-    }
-    
+def create_analysis_session(name, rules_file_id, traffic_file_id, analysis_types=None):
+    """Create a RuleAnalysisSession via the backend API and return the session object"""
     try:
+        if analysis_types is None:
+            analysis_types = ['SHD', 'RXD', 'GEN', 'COR']
+        data = {
+            'name': name,
+            'rules_file': rules_file_id,
+            'traffic_file': traffic_file_id,
+            'analysis_types': analysis_types
+        }
+        response = requests.post(SESSIONS_API_URL, json=data)
+        return response
+    except Exception as e:
+        st.error(f"Create session error: {str(e)}")
+        return None
+
+def analyze_rules_by_session(session_id, analysis_types=None):
+    """Request rule analysis for an existing backend session (session_id)."""
+    try:
+        data = {'session_id': session_id}
+        if analysis_types:
+            data['analysis_types'] = analysis_types
+        response = requests.post(RULE_ANALYSIS_API_URL, json=data, timeout=60)
+        return response
+    except Exception as e:
+        st.error(f"Analyze by session error: {str(e)}")
+        return None
+
+def analyze_rules(rules_content, logs_content, analysis_types):
+    """Run rule analysis with file content as strings"""
+    try:
+        # Convert bytes to string if needed
+        if isinstance(rules_content, bytes):
+            rules_content = rules_content.decode('utf-8')
+        if isinstance(logs_content, bytes):
+            logs_content = logs_content.decode('utf-8')
+        
+        analysis_data = {
+            'rules_content': rules_content,
+            'logs_content': logs_content,
+            'analysis_types': [atype[:3].upper() for atype in analysis_types]
+        }
+        
         response = requests.post(RULE_ANALYSIS_API_URL, json=analysis_data, timeout=30)
         return response
+        
     except Exception as e:
         st.error(f"Analysis error: {str(e)}")
         return None
@@ -88,15 +126,28 @@ def get_performance_dashboard():
         return None
 
 def upload_file(file, file_type):
-    """Upload a file to the backend"""
+    """Upload a file to the Django backend (which uploads to Supabase)"""
     try:
-        files = {'file': file}
+        files = {'file': (file.name, file, "text/csv")}
         data = {'file_type': file_type}
         response = requests.post(API_URL, files=files, data=data)
-        return response
+        
+        if response.status_code in [200, 201]:
+            return response.json()  # returns dict with 'filename', 'supabase_path', etc.
+        else:
+            # Return the error information so the calling function can handle it
+            error_info = {
+                'error': response.text,
+                'status_code': response.status_code
+            }
+            return error_info
     except Exception as e:
-        st.error(f"Upload error: {str(e)}")
-        return None
+        # Return the exception information so the calling function can handle it
+        error_info = {
+            'error': str(e),
+            'status_code': 500
+        }
+        return error_info
 
 def validate_csv_structure(file, file_type):
     """Validate CSV file structure based on file type"""
@@ -136,14 +187,18 @@ def validate_csv_structure(file, file_type):
     except Exception as e:
         return False, f"Error reading file: {str(e)}"
     
-def delete_file(file_id):
-    """Delete a file by ID"""
-    delete_url = f"{API_URL}delete/{file_id}/"
+def delete_file(filename, file_type):
+    """Delete a file by filename and type"""
     try:
-        response = requests.delete(delete_url)
+        data = {
+            'filename': filename,
+            'file_type': file_type
+        }
+        response = requests.delete(f"{API_URL}delete_by_name", json=data)
         return response
     except Exception as e:
         st.error(f"Deletion error: {str(e)}")
+        return None
 
 # FR04: False Positive Reduction API Functions
 def detect_false_positives_api(session_id, detection_method, threshold):
