@@ -40,12 +40,7 @@ class UploadedFileViewSet(viewsets.ModelViewSet):
 
             # Upload file content to the correct Supabase Storage bucket
             file_content = file_obj.read()
-            # Use a file-like object for upload to be compatible with different Supabase clients
-            try:
-                supabase.storage.from_(bucket_name).upload(file_obj.name, io.BytesIO(file_content))
-            except Exception:
-                # Fallback: try uploading raw bytes
-                supabase.storage.from_(bucket_name).upload(file_obj.name, file_content)
+            supabase.storage.from_(bucket_name).upload(file_obj.name, file_content)
 
             # Save metadata in Django DB
             uploaded_file = UploadedFile.objects.create(

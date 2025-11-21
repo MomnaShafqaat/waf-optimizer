@@ -54,32 +54,18 @@ def render_rule_analysis():
                 # Convert full names to abbreviations before sending
                 analysis_types_abbr = [analysis_map[atype] for atype in analysis_types]
                 
-                # Prefer session-based analysis: create backend session from uploaded files and trigger analysis
-                uploaded_files = get_files_data()
-                rules_uploaded = next((f for f in uploaded_files if f.get('filename') == selected_rules['name'] and f.get('file_type') in ['rules']), None)
-                logs_uploaded = next((f for f in uploaded_files if f.get('filename') == selected_logs['name'] and f.get('file_type') in ['traffic', 'logs']), None)
-
-                if not rules_uploaded or not logs_uploaded:
-                    st.error("❌ UploadedFile metadata not found for selected files. Please upload them via File Management first.")
+                # Call the original analyze_rules function with file content
+                response = analyze_rules(
+                    rules_content, 
+                    logs_content, 
+                    analysis_types_abbr
+                )
+                
+                if response and response.status_code == 200:
+                    st.success("✅ Analysis completed!")
+                    display_analysis_results(response.json())
                 else:
-                    # create backend session
-                    session_name = f"{selected_rules['name']} + {selected_logs['name']}"
-                    create_resp = create_analysis_session(session_name, rules_uploaded['id'], logs_uploaded['id'])
-                    if not create_resp or create_resp.status_code not in [200, 201]:
-                        st.error("❌ Failed to create analysis session on backend")
-                    else:
-                        sess_obj = create_resp.json()
-                        session_id = sess_obj.get('id') or sess_obj.get('pk') or sess_obj.get('session_id')
-                        if not session_id:
-                            st.error("❌ Backend did not return a session id")
-                        else:
-                            # trigger analysis by session
-                            response = analyze_rules_by_session(session_id, analysis_types_abbr)
-                            if response and response.status_code == 200:
-                                st.success("✅ Analysis completed!")
-                                display_analysis_results(response.json())
-                            else:
-                                st.error("❌ Analysis failed - check backend connection or logs")
+                    st.error("❌ Analysis failed - check backend connection")
         else:
             st.info("👆 Click the button above to start the security analysis with the selected files and analysis types.")
     else:
