@@ -4,7 +4,7 @@ from django.http import JsonResponse
 import pandas as pd
 from .models import RulePerformance, PerformanceSnapshot
 from .performance_analyzer import RulePerformanceProfiler
-from data_management.models import UploadedFile
+from supabase_client import supabase
 from .supabase_utils import get_file_as_dataframe
 
 @api_view(['POST'])
@@ -27,21 +27,25 @@ def analyze_rule_performance(request):
         
         # Get traffic file from Supabase
         try:
-            traffic_file = UploadedFile.objects.get(id=traffic_file_id, file_type__in=['traffic', 'logs'])
+            resp = supabase.table('uploaded_files').select('*').eq('id', traffic_file_id).execute()
+            recs = getattr(resp, 'data', None) or (resp.json().get('data') if hasattr(resp, 'json') else None)
+            if not recs:
+                return Response({'error': f'Traffic file with ID {traffic_file_id} not found'}, status=404)
+            traffic_file = recs[0]
             traffic_data = get_file_as_dataframe(traffic_file)
-            print(f"📊 Loaded traffic file: {traffic_file.filename}, shape: {traffic_data.shape}")
-        except UploadedFile.DoesNotExist:
-            return Response({'error': f'Traffic file with ID {traffic_file_id} not found'}, status=404)
+            print(f"📊 Loaded traffic file: {traffic_file.get('filename')}, shape: {traffic_data.shape}")
         except Exception as e:
             return Response({'error': f'Error reading traffic file: {str(e)}'}, status=400)
         
         # Get rules file from Supabase
         try:
-            rules_file = UploadedFile.objects.get(id=rules_file_id, file_type='rules')
+            resp = supabase.table('uploaded_files').select('*').eq('id', rules_file_id).execute()
+            recs = getattr(resp, 'data', None) or (resp.json().get('data') if hasattr(resp, 'json') else None)
+            if not recs:
+                return Response({'error': f'Rules file with ID {rules_file_id} not found'}, status=404)
+            rules_file = recs[0]
             rules_data = get_file_as_dataframe(rules_file)
-            print(f"📋 Loaded rules file: {rules_file.filename}, shape: {rules_data.shape}")
-        except UploadedFile.DoesNotExist:
-            return Response({'error': f'Rules file with ID {rules_file_id} not found'}, status=404)
+            print(f"📋 Loaded rules file: {rules_file.get('filename')}, shape: {rules_data.shape}")
         except Exception as e:
             return Response({'error': f'Error reading rules file: {str(e)}'}, status=400)
         

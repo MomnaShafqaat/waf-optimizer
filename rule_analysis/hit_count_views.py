@@ -3,7 +3,7 @@ from rest_framework.response import Response
 import pandas as pd
 from .hit_counter import RuleHitCounter
 from .models import RulePerformance
-from data_management.models import UploadedFile
+from supabase_client import supabase
 from .supabase_utils import get_file_as_dataframe
 
 @api_view(['POST'])
@@ -15,33 +15,116 @@ def update_rule_hit_counts(request):
         # Get parameters from request
         traffic_file_id = request.data.get('traffic_file_id')
         rules_file_id = request.data.get('rules_file_id')
+        # Raw content payloads (preferred from frontend)
+        traffic_content = request.data.get('traffic_content') or request.data.get('logs_content') or request.data.get('traffic_file_content')
+        rules_content = request.data.get('rules_content') or request.data.get('rules_file_content')
         update_type = request.data.get('update_type', 'incremental')
         
         print(f"🔄 Processing hit counts update: traffic={traffic_file_id}, rules={rules_file_id}")
         
-        # Validate required parameters
-        if not traffic_file_id:
-            # Try to pick the most recent traffic file as a sensible default
-            latest = UploadedFile.objects.filter(file_type__in=['traffic', 'logs']).order_by('-uploaded_at').first()
-            if latest:
-                traffic_file_id = latest.id
-            else:
-                return Response({'error': 'traffic_file_id is required and no traffic files are available'}, status=400)
+        # Validate required parameters: if raw content provided, we don't need file ids
+        if not traffic_file_id and not traffic_content:
+            # Try to pick the most recent traffic file from Supabase metadata as a sensible default
+            try:
+                resp = supabase.table('uploaded_files').select('*').in_('file_type', ['traffic', 'logs']).order('uploaded_at', desc=True).limit(1).execute()
+                recs = getattr(resp, 'data', None) or (resp.json().get('data') if hasattr(resp, 'json') else None)
+                if recs and len(recs) > 0:
+                    traffic_file_id = recs[0].get('id')
+                else:
+                    return Response({'error': 'traffic_file_id is required and no traffic files are available'}, status=400)
+            except Exception:
+                return Response({'error': 'traffic_file_id is required and could not query Supabase for defaults'}, status=400)
         
-        # Load traffic data from Supabase
+        # Load traffic data from Supabase — accept raw content or int ids or filename-like identifiers
         try:
-            traffic_file = UploadedFile.objects.get(id=traffic_file_id, file_type__in=['traffic', 'logs'])
-            traffic_data = get_file_as_dataframe(traffic_file)
-            print(f"📊 Loaded traffic file: {traffic_file.filename}, shape: {traffic_data.shape}")
-            
+            # If frontend sent raw content, prefer it
+            raw_traffic_content = request.data.get('traffic_content') or request.data.get('logs_content') or request.data.get('traffic_file_content')
+            if raw_traffic_content:
+                import io
+                if isinstance(raw_traffic_content, (bytes, bytearray)):
+                    raw_traffic_content = raw_traffic_content.decode('utf-8')
+                traffic_data = pd.read_csv(io.StringIO(raw_traffic_content))
+            else:
+                traffic_file = None
+
+                def _extract_identifier(v):
+                    if isinstance(v, dict):
+                        return v.get('id') or v.get('filename') or v.get('name') or v.get('supabase_path') or v.get('key')
+                    return v
+
+                traffic_file_id_extracted = _extract_identifier(traffic_file_id)
+
+                def _query_tables_eq(field, value):
+                    for tbl in ('uploaded_files', 'files'):
+                        try:
+                            resp = supabase.table(tbl).select('*').eq(field, value).execute()
+                            recs = getattr(resp, 'data', None) or (resp.json().get('data') if hasattr(resp, 'json') else None)
+                            if recs:
+                                recs[0]['_meta_table'] = tbl
+                                return recs
+                        except Exception:
+                            continue
+                    return None
+
+                def _query_tables_or(expr):
+                    for tbl in ('uploaded_files', 'files'):
+                        try:
+                            resp = supabase.table(tbl).select('*').or_(expr).execute()
+                            recs = getattr(resp, 'data', None) or (resp.json().get('data') if hasattr(resp, 'json') else None)
+                            if recs:
+                                recs[0]['_meta_table'] = tbl
+                                return recs
+                        except Exception:
+                            continue
+                    return None
+
+                def _query_tables_like(field, pattern):
+                    for tbl in ('uploaded_files', 'files'):
+                        try:
+                            resp = supabase.table(tbl).select('*').like(field, pattern).execute()
+                            recs = getattr(resp, 'data', None) or (resp.json().get('data') if hasattr(resp, 'json') else None)
+                            if recs:
+                                recs[0]['_meta_table'] = tbl
+                                return recs
+                        except Exception:
+                            continue
+                    return None
+
+                # attempt numeric id
+                try:
+                    tid_int = int(traffic_file_id_extracted)
+                except Exception:
+                    tid_int = None
+
+                if tid_int is not None:
+                    recs = _query_tables_eq('id', tid_int)
+                    if recs:
+                        traffic_file = recs[0]
+                if traffic_file is None and traffic_file_id_extracted:
+                    recs = _query_tables_eq('filename', traffic_file_id_extracted)
+                    if recs:
+                        traffic_file = recs[0]
+                if traffic_file is None and traffic_file_id_extracted:
+                    recs = _query_tables_or(f"supabase_path.eq.{traffic_file_id_extracted},key.eq.{traffic_file_id_extracted}")
+                    if recs:
+                        traffic_file = recs[0]
+                if traffic_file is None and traffic_file_id_extracted:
+                    recs = _query_tables_like('filename', f"%{traffic_file_id_extracted}%")
+                    if recs:
+                        traffic_file = recs[0]
+
+                if traffic_file is None:
+                    return Response({'error': f'Traffic file with ID {traffic_file_id} not found'}, status=404)
+
+                traffic_data = get_file_as_dataframe(traffic_file)
+                print(f"📊 Loaded traffic file: {traffic_file.get('filename')}, shape: {traffic_data.shape}")
+
             # Validate required columns in traffic data
             if 'rule_id' not in traffic_data.columns:
                 return Response({
                     'error': f'Traffic file missing required column: rule_id. Available columns: {list(traffic_data.columns)}'
                 }, status=400)
-                
-        except UploadedFile.DoesNotExist:
-            return Response({'error': f'Traffic file with ID {traffic_file_id} not found'}, status=404)
+
         except Exception as e:
             return Response({'error': f'Error reading traffic file: {str(e)}'}, status=400)
         

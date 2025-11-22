@@ -99,9 +99,16 @@ def get_ranking_comparison(session_id):
 def get_files_data():
     """Get uploaded files data"""
     try:
-        response = requests.get(f'{API_BASE}/files/', timeout=30)
+        response = requests.get(f'{API_BASE}/files/summary/', timeout=30)
         if response.status_code == 200:
-            return response.json()
+            data = response.json()
+            # If the summary endpoint returns grouped lists, flatten them
+            if isinstance(data, dict) and ('rules' in data or 'traffic' in data):
+                rules = data.get('rules', []) or []
+                traffic = data.get('traffic', []) or []
+                return rules + traffic
+            # Otherwise assume it's already a flat list
+            return data
         return []
     except Exception as e:
         print(f"🚨 Files API error: {e}")
@@ -112,7 +119,8 @@ def upload_file(file, file_type):
     try:
         files = {'file': (file.name, file, 'text/csv')}
         data = {'file_type': file_type}
-        response = requests.post(f'{API_BASE}/files/upload/', files=files, data=data)
+        # POST to the files ViewSet endpoint
+        response = requests.post(f'{API_BASE}/files/', files=files, data=data)
         return response
     except Exception as e:
         st.error(f"🚨 Upload error: {e}")

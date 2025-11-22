@@ -37,12 +37,10 @@ INSTALLED_APPS = [
     'django_extensions',
     'threshold_tuning',
     'data_management',
-    'corsheaders',
     'rule_analysis',
 ]
 
 MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware',  # must be at the top
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -109,49 +107,59 @@ if SUPABASE_DB_HOST and SUPABASE_DB_PASSWORD:
     }
     print("✅ Using Supabase PostgreSQL database (direct connection)")
 
-# Priority 2: Use Supabase URL and service key
+# Note: Do NOT attempt to use the Supabase service role key as a database password.
+# The service role key is an API key for Supabase services and usually is NOT
+# valid for direct Postgres authentication. Attempting to connect using it can
+# cause long blocking connection attempts (observed previously). If you want
+# Django to use Supabase Postgres, set a proper Postgres connection string
+# in `SUPABASE_DB_URL` (recommended) or provide `SUPABASE_DB_HOST` and
+# `SUPABASE_DB_PASSWORD`. We will skip using `SUPABASE_URL` +
+# `SUPABASE_SERVICE_ROLE_KEY` to configure DATABASES.
 elif SUPABASE_URL and SUPABASE_SERVICE_KEY:
-    # Extract host from Supabase URL
-    host = SUPABASE_URL.replace('https://', '').split('.')[0] + '.supabase.co'
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.postgresql',
-            'NAME': 'postgres',
-            'USER': 'postgres',
-            'PASSWORD': SUPABASE_SERVICE_KEY,
-            'HOST': host,
-            'PORT': '5432',
-            'OPTIONS': {
-                'sslmode': 'require',
-            },
-        }
-    }
-    print("✅ Using Supabase PostgreSQL database (via Supabase URL)")
+    print("⚠️ SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY detected, but skipping automatic DB configuration.")
+    print("⚠️ To use Supabase Postgres with Django, set SUPABASE_DB_URL or SUPABASE_DB_HOST and SUPABASE_DB_PASSWORD in your .env.")
 
 # Priority 3: Use database URL
 elif SUPABASE_DB_URL:
-    # Parse the database URL
-    if SUPABASE_DB_URL.startswith('postgresql://'):
-        # Simple parsing for common Supabase URL format
-        parts = SUPABASE_DB_URL.replace('postgresql://', '').split('@')
-        user_pass = parts[0].split(':')
-        host_port_db = parts[1].split('/')
-        host_port = host_port_db[0].split(':')
-        
+    # Parse the database URL robustly (accept both postgres:// and postgresql://)
+    try:
+        from urllib.parse import urlparse
+
+        parsed = urlparse(SUPABASE_DB_URL)
+        # urlparse handles both postgres:// and postgresql://
+        db_name = parsed.path.lstrip('/') if parsed.path else 'postgres'
+        db_user = parsed.username or os.getenv('SUPABASE_DB_USER', 'postgres')
+        db_password = parsed.password or os.getenv('SUPABASE_DB_PASSWORD')
+        db_host = parsed.hostname or os.getenv('SUPABASE_DB_HOST')
+        db_port = parsed.port or os.getenv('SUPABASE_DB_PORT', '5432')
+
+        if not (db_user and db_password and db_host):
+            raise ValueError('Incomplete DB url (missing user/password/host)')
+
         DATABASES = {
             'default': {
                 'ENGINE': 'django.db.backends.postgresql',
-                'NAME': host_port_db[1],
-                'USER': user_pass[0],
-                'PASSWORD': user_pass[1],
-                'HOST': host_port[0],
-                'PORT': host_port[1] if len(host_port) > 1 else '5432',
+                'NAME': db_name,
+                'USER': db_user,
+                'PASSWORD': db_password,
+                'HOST': db_host,
+                'PORT': str(db_port),
                 'OPTIONS': {
                     'sslmode': 'require',
                 },
             }
         }
-        print("✅ Using Supabase PostgreSQL database (via database URL)")
+        print(f"✅ Using Supabase PostgreSQL database (host={db_host}, db={db_name})")
+    except Exception as e:
+        print(f"⚠️ Failed to parse SUPABASE_DB_URL: {e}")
+        # Fall back to SQLite if parsing fails
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.sqlite3',
+                'NAME': BASE_DIR / 'db.sqlite3',
+            }
+        }
+        print("⚠️ Falling back to SQLite due to DB URL parse error")
 
 # Fallback: Use SQLite
 else:
@@ -204,6 +212,19 @@ REST_FRAMEWORK = {
     ],
 }
 
+# Enable CORS middleware only if `django-cors-headers` is installed.
+try:
+    import importlib
+    importlib.import_module('corsheaders')
+    # Prepend corsheaders to INSTALLED_APPS and MIDDLEWARE
+    if 'corsheaders' not in INSTALLED_APPS:
+        INSTALLED_APPS.insert(INSTALLED_APPS.index('rule_analysis'), 'corsheaders')
+    if 'corsheaders.middleware.CorsMiddleware' not in MIDDLEWARE:
+        MIDDLEWARE.insert(0, 'corsheaders.middleware.CorsMiddleware')
+    print("✅ 'django-cors-headers' found and enabled")
+except Exception:
+    print("⚠️ 'django-cors-headers' not installed; skipping CORS middleware. Install it to enable cross-origin requests.")
+
 # SUPABASE CLIENT FOR FILE STORAGE
 try:
     from supabase_client import supabase as supabase_client
@@ -212,3 +233,25 @@ try:
 except Exception as e:
     supabase = None
     print(f"⚠️ Could not import Supabase client from supabase_client.py: {e}")
+
+# Defensive check: ensure DATABASES is correctly configured with an ENGINE.
+# Some earlier runtime errors showed Django raised: "settings.DATABASES is
+# improperly configured. Please supply the ENGINE value." To avoid that and
+# keep a reliable dev experience, ensure there's always a default sqlite3
+# ENGINE if none of the Supabase DB options were usable. This keeps the
+# application runnable without requiring the user to provide DB env vars.
+try:
+    if 'default' not in globals().get('DATABASES', {}):
+        raise KeyError('no_default')
+    default_db = DATABASES.get('default')
+    if not default_db or not default_db.get('ENGINE'):
+        raise KeyError('no_engine')
+except Exception:
+    print("⚠️ DATABASES not properly configured. Falling back to local SQLite for development.")
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
+    print("✅ DATABASES configured to use SQLite (development fallback). To use Supabase Postgres, set SUPABASE_DB_URL or SUPABASE_DB_HOST and SUPABASE_DB_PASSWORD in your .env.")

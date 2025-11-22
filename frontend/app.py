@@ -68,6 +68,16 @@ else:
 if 'files_data' not in st.session_state:
     st.session_state.files_data = get_files_data()
 
+# Add a visible refresh control so users can repopulate file lists without
+# restarting Streamlit (helps when files were added or metadata changed).
+st.markdown("#### File list")
+col_r1, col_r2 = st.columns([1, 4])
+with col_r1:
+    if st.button("🔄 Refresh files", key="global_refresh_files"):
+        st.session_state.files_data = get_files_data()
+with col_r2:
+    st.write(f"Found {len(st.session_state.files_data)} uploaded file(s)")
+
 # -----------------------------
 # 6️⃣ Render Dashboard / Sections
 # -----------------------------

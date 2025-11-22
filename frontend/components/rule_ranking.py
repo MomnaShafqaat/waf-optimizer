@@ -9,13 +9,36 @@ def render_performance_profiling():
     st.header("📊 Performance Profiling")
     st.write("Analyze rule efficiency and identify optimization opportunities")
     
+    def _normalize(f, default_type='traffic'):
+        filename = f.get('filename') or f.get('name') or f.get('file') or f.get('file_name') or f.get('key') or f.get('path') or ''
+        _id = f.get('id') or f.get('supabase_path') or filename
+        file_type = f.get('file_type') or default_type
+        return {'id': _id, 'filename': filename, 'file_type': file_type, 'raw': f}
+
     col1, col2 = st.columns(2)
     with col1:
-        traffic_files = [f for f in st.session_state.get('files_data', []) if f['file_type'] == 'traffic']
+        files_data = st.session_state.get('files_data', [])
+        traffic_files = [ _normalize(f, 'traffic') for f in files_data if (f.get('file_type') or '').lower() == 'traffic' ]
+
+        # fallback to any selected session value if backend list is empty
+        sel_traffic = st.session_state.get('selected_logs_file') or st.session_state.get('selected_traffic_file') or st.session_state.get('selected_traffic')
+        if not traffic_files and sel_traffic:
+            traffic_files = [_normalize(sel_traffic, 'traffic')]
+
+        # build default index from session state selection
+        default_index = 0
+        if sel_traffic and traffic_files:
+            sel_name = sel_traffic.get('filename') or sel_traffic.get('name') or sel_traffic.get('file')
+            for i, t in enumerate(traffic_files):
+                if t['filename'] and sel_name and t['filename'].endswith(sel_name.split('/')[-1]):
+                    default_index = i
+                    break
+
         selected_traffic = st.selectbox(
             "Select Traffic Data:",
             options=traffic_files,
-            format_func=lambda x: x['filename'].split('/')[-1],
+            format_func=lambda x: (x.get('filename') or '').split('/')[-1],
+            index=default_index,
             key="performance_traffic_select"
         )
     with col2:
@@ -137,13 +160,36 @@ def render_rule_ranking():
     st.header("⚡ Performance Optimization")
     st.write("Intelligent rule reordering based on performance data")
     
+    def _normalize(f, default_type='rules'):
+        filename = f.get('filename') or f.get('name') or f.get('file') or f.get('file_name') or f.get('key') or f.get('path') or ''
+        _id = f.get('id') or f.get('supabase_path') or filename
+        file_type = f.get('file_type') or default_type
+        return {'id': _id, 'filename': filename, 'file_type': file_type, 'raw': f}
+
     col1, col2 = st.columns(2)
     with col1:
-        rules_files = [f for f in st.session_state.get('files_data', []) if f['file_type'] == 'rules']
+        files_data = st.session_state.get('files_data', [])
+        rules_files = [ _normalize(f, 'rules') for f in files_data if (f.get('file_type') or '').lower() == 'rules' ]
+
+        # fallback to any selected session value if backend list is empty
+        sel_rules = st.session_state.get('selected_rules_file') or st.session_state.get('selected_rules')
+        if not rules_files and sel_rules:
+            rules_files = [_normalize(sel_rules, 'rules')]
+
+        # default selection index based on session state
+        default_index = 0
+        if sel_rules and rules_files:
+            sel_name = sel_rules.get('filename') or sel_rules.get('name') or sel_rules.get('file')
+            for i, r in enumerate(rules_files):
+                if r['filename'] and sel_name and r['filename'].endswith(sel_name.split('/')[-1]):
+                    default_index = i
+                    break
+
         selected_rules = st.selectbox(
             "Select Rules Configuration:",
             options=rules_files,
-            format_func=lambda x: x['filename'].split('/')[-1],
+            format_func=lambda x: (x.get('filename') or '').split('/')[-1],
+            index=default_index,
             key="ranking_rules_select"
         )
     with col2:

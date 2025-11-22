@@ -5,7 +5,7 @@ from django.contrib.auth.decorators import user_passes_test
 import pandas as pd
 from .models import RulePerformance, RuleRankingSession
 from .ranking_algorithm import SmartRuleRanker
-from data_management.models import UploadedFile
+from supabase_client import supabase
 from .supabase_utils import get_file_as_dataframe
 
 def is_admin(user):
@@ -29,31 +29,111 @@ def generate_rule_ranking(request):
         # ======================================================================================
         rules_file_id = request.data.get("rules_file_id")
         session_name = request.data.get("session_name")
+        # Accept raw CSV content from frontend as alternative to metadata id
+        raw_rules_content = request.data.get('rules_content') or request.data.get('rules_file_content')
 
-        if not rules_file_id:
-            return Response({"error": "rules_file_id is required"}, status=400)
+        if not rules_file_id and not raw_rules_content:
+            return Response({"error": "Either rules_file_id or rules_content is required"}, status=400)
 
         if not session_name:
             return Response({"error": "session_name is required"}, status=400)
 
-        try:
-            rules_file_id = int(rules_file_id)
-        except:
-            return Response({"error": "rules_file_id must be an integer"}, status=400)
+        # Accept either numeric DB id or a filename/supabase path string from Supabase-backed metadata
+        rules_file = None
 
-        try:
-            rules_file = UploadedFile.objects.get(id=rules_file_id, file_type="rules")
-        except UploadedFile.DoesNotExist:
-            return Response(
-                {"error": f"Rules file {rules_file_id} not found"},
-                status=404
-            )
+        def _query_tables_eq(field, value):
+            for tbl in ('uploaded_files', 'files'):
+                try:
+                    resp = supabase.table(tbl).select('*').eq(field, value).execute()
+                    recs = getattr(resp, 'data', None) or (resp.json().get('data') if hasattr(resp, 'json') else None)
+                    if recs:
+                        # annotate which table returned the row for debugging
+                        recs[0]['_meta_table'] = tbl
+                        return recs
+                except Exception:
+                    continue
+            return None
+
+        def _query_tables_or(expr):
+            for tbl in ('uploaded_files', 'files'):
+                try:
+                    resp = supabase.table(tbl).select('*').or_(expr).execute()
+                    recs = getattr(resp, 'data', None) or (resp.json().get('data') if hasattr(resp, 'json') else None)
+                    if recs:
+                        recs[0]['_meta_table'] = tbl
+                        return recs
+                except Exception:
+                    continue
+            return None
+
+        def _query_tables_like(field, pattern):
+            for tbl in ('uploaded_files', 'files'):
+                try:
+                    resp = supabase.table(tbl).select('*').like(field, pattern).execute()
+                    recs = getattr(resp, 'data', None) or (resp.json().get('data') if hasattr(resp, 'json') else None)
+                    if recs:
+                        recs[0]['_meta_table'] = tbl
+                        return recs
+                except Exception:
+                    continue
+            return None
+        # If the frontend provided raw CSV content, skip metadata lookups entirely
+        if not raw_rules_content:
+            # Accept dict-like identifiers from frontend (full metadata object)
+            def _extract_identifier(v):
+                if isinstance(v, dict):
+                    return v.get('id') or v.get('filename') or v.get('name') or v.get('supabase_path') or v.get('key')
+                return v
+
+            rules_file_id_extracted = _extract_identifier(rules_file_id)
+
+            # First try numeric id
+            try:
+                rid_int = int(rules_file_id_extracted)
+            except Exception:
+                rid_int = None
+
+            try:
+                if rid_int is not None:
+                    recs = _query_tables_eq('id', rid_int)
+                    if recs:
+                        rules_file = recs[0]
+
+                # If not found by numeric id, try filename/path lookups (string identifiers)
+                if rules_file is None and rules_file_id_extracted:
+                    recs = _query_tables_eq('filename', rules_file_id_extracted)
+                    if recs:
+                        rules_file = recs[0]
+
+                if rules_file is None and rules_file_id_extracted:
+                    recs = _query_tables_or(f"supabase_path.eq.{rules_file_id_extracted},key.eq.{rules_file_id_extracted}")
+                    if recs:
+                        rules_file = recs[0]
+
+                # Last resort: try a contains/like search on filename
+                if rules_file is None and rules_file_id_extracted:
+                    recs = _query_tables_like('filename', f"%{rules_file_id_extracted}%")
+                    if recs:
+                        rules_file = recs[0]
+
+                if rules_file is None:
+                    return Response({"error": f"Rules file {rules_file_id} not found"}, status=404)
+            except Exception as e:
+                return Response({"error": f"Rules file {rules_file_id} not found: {str(e)}"}, status=404)
         # ======================================================================================
 
         # Load rules file into dataframe
         try:
-            rules_df = get_file_as_dataframe(rules_file)
-            print(f"📋 Loaded rules file: {rules_file.filename}, shape: {rules_df.shape}")
+            # If frontend sent raw content, prefer it
+            raw_rules_content = request.data.get('rules_content') or request.data.get('rules_file_content')
+            if raw_rules_content:
+                import io
+                if isinstance(raw_rules_content, (bytes, bytearray)):
+                    raw_rules_content = raw_rules_content.decode('utf-8')
+                rules_df = pd.read_csv(io.StringIO(raw_rules_content))
+            else:
+                rules_df = get_file_as_dataframe(rules_file)
+            print(f"📋 Loaded rules file: {rules_file.get('filename') if isinstance(rules_file, dict) else getattr(rules_file, 'filename', None)}, shape: {rules_df.shape}")
             print(f"🔍 Rules file columns: {list(rules_df.columns)}")
 
             # Ensure rule_id exists

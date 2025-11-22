@@ -463,17 +463,20 @@ def export_whitelist_csv(request):
                         pass
                     supabase.storage.from_(bucket_name).upload(supabase_path, file_bytes)
 
-                uploaded_file = UploadedFile.objects.create(
-                    filename=export_name,
-                    file_type='rules',
-                    file_size=os.path.getsize(local_file_path),
-                    supabase_path=supabase_path
-                )
+                # Create metadata record in Supabase `uploaded_files` table
+                record = {
+                    'filename': export_name,
+                    'file_type': 'rules',
+                    'file_size': os.path.getsize(local_file_path),
+                    'supabase_path': supabase_path
+                }
+                insert_resp = supabase.table('uploaded_files').insert(record).execute()
+                insert_data = getattr(insert_resp, 'data', None) or (insert_resp.json().get('data') if hasattr(insert_resp, 'json') else None)
 
                 export_record.file_path = supabase_path
                 export_record.status = 'completed'
                 export_record.total_patterns = len(csv_data)
-                export_record.file_size_bytes = uploaded_file.file_size
+                export_record.file_size_bytes = record['file_size']
                 export_record.completed_at = datetime.now()
                 export_record.save()
 
