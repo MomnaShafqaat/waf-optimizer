@@ -1,19 +1,19 @@
 # rule_analysis/urls.py
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import RuleAnalysisSessionViewSet, analyze_rules
+#from .views import RuleAnalysisSessionViewSet, analyze_rules
 from .ranking_views import generate_rule_ranking, get_ranking_session, get_ranking_comparison, approve_ranking_session
 from .hit_count_views import update_rule_hit_counts, get_hit_count_dashboard, get_rule_hit_details
 from .performance_views import analyze_rule_performance, get_performance_snapshot, get_rule_performance_dashboard
 
 router = DefaultRouter()
-router.register(r'sessions', RuleAnalysisSessionViewSet, basename='session')
+#router.register(r'sessions', RuleAnalysisSessionViewSet, basename='session')
 
 urlpatterns = [
     path('', include(router.urls)),
     
     # Rule analysis endpoints
-    path('analyze/', analyze_rules, name='analyze-rules'),
+    #path('analyze/', analyze_rules, name='analyze-rules'),
     
     # Rule ranking endpoints (FR05)
     path('ranking/generate/', generate_rule_ranking, name='generate-ranking'),

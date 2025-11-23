@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     # 'waf_analysis',
     'rule_analysis',
     'false_positive_reduction',
+    'optimization_recs_module',
 ]
 
 MIDDLEWARE = [

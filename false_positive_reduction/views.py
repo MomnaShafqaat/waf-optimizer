@@ -9,7 +9,7 @@ import os
 from datetime import datetime
 from collections import Counter, defaultdict
 
-from rule_analysis.models import RuleAnalysisSession
+from optimization_recs_module.models import RuleAnalysisSession
 from .models import FalsePositiveDetection, WhitelistSuggestion, LearningModeSession, WhitelistExport
 from .serializers import FalsePositiveDetectionSerializer
 

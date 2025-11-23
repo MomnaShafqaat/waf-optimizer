@@ -1,7 +1,6 @@
 from django.db import models
 from data_management.models import UploadedFile
 
-"""
 class RuleAnalysisSession(models.Model):
     ANALYSIS_TYPES = [
         ('SHD', 'Shadowing'),
@@ -136,110 +135,6 @@ class AIOptimizationStrategy(models.Model):
     def __str__(self):
         return f"AI Strategy for {self.session.name}"
 
-"""
-
-# FR03: Rule Performance Profiling Models
-class RulePerformance(models.Model):
-    """
-    FR03-01: Tracks real performance data for each rule
-    FR03-02: Calculates performance metrics  
-    FR03-03: Flags inefficient rules
-    """
-    rule_id = models.CharField(max_length=50, unique=True)
-    
-    # FR03-01: Hit counting
-    hit_count = models.IntegerField(default=0)
-    total_requests_processed = models.IntegerField(default=0)
-    
-    # FR03-02: Performance metrics
-    match_frequency = models.FloatField(default=0.0)  # hits / total_requests
-    average_evaluation_time = models.FloatField(default=0.0)
-    effectiveness_ratio = models.FloatField(default=0.0)  # true positives / total hits
-    last_triggered = models.DateTimeField(null=True, blank=True)
-    
-    # FR03-03: Rule efficiency flags
-    is_rarely_used = models.BooleanField(default=False)
-    is_redundant = models.BooleanField(default=False)
-    is_high_performance = models.BooleanField(default=False)
-    
-    # NEW: AI optimization flags
-    ai_optimization_suggested = models.BooleanField(default=False)
-    ai_optimization_type = models.CharField(max_length=50, blank=True, null=True)
-    last_ai_analysis = models.DateTimeField(null=True, blank=True)
-    
-    # Timestamps
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    
-    class Meta:
-        db_table = 'rule_performance'
-        indexes = [
-            models.Index(fields=['hit_count']),
-            models.Index(fields=['is_rarely_used']),
-            models.Index(fields=['is_redundant']),
-            models.Index(fields=['ai_optimization_suggested']),
-        ]
-    
-    def __str__(self):
-        return f"Performance: {self.rule_id} ({self.hit_count} hits)"
-
-class PerformanceSnapshot(models.Model):
-    """
-    Tracks performance over time for analytics
-    """
-    snapshot_name = models.CharField(max_length=255)
-    total_rules = models.IntegerField(default=0)
-    rarely_used_count = models.IntegerField(default=0)
-    redundant_count = models.IntegerField(default=0)
-    high_performance_count = models.IntegerField(default=0)
-    snapshot_data = models.JSONField()  # Detailed metrics
-    created_at = models.DateTimeField(auto_now_add=True)
-    
-    # NEW: AI optimization metrics
-    ai_optimization_opportunities = models.IntegerField(default=0)
-    estimated_ai_improvement = models.FloatField(default=0.0)
-    
-    class Meta:
-        db_table = 'performance_snapshots'
-    
-    def __str__(self):
-        return f"Snapshot: {self.snapshot_name}"
-
-# FR05: Rule Ranking Models
-class RuleRankingSession(models.Model):
-    """
-    FR05-02: Stores different ranking proposals for comparison
-    LEARNING: Like saving different versions of rule order
-    """
-    name = models.CharField(max_length=255)
-    original_rules_order = models.JSONField()  # Current order
-    optimized_rules_order = models.JSONField()  # Proposed order
-    performance_improvement = models.FloatField(default=0.0)  # Expected gain
-    created_at = models.DateTimeField(auto_now_add=True)
-    
-    # FR05-03: Approval workflow
-    STATUS_CHOICES = [
-        ('proposed', 'Proposed'),
-        ('approved', 'Approved'),
-        ('rejected', 'Rejected'),
-        ('applied', 'Applied'),
-    ]
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='proposed')
-    approved_by = models.ForeignKey('auth.User', null=True, blank=True, on_delete=models.SET_NULL)
-    
-    # NEW: AI-generated ranking fields
-    ai_generated = models.BooleanField(default=False, help_text="Whether ranking was AI-generated")
-    ai_confidence = models.FloatField(default=0.0, help_text="AI confidence in the ranking")
-    ai_optimization_rationale = models.JSONField(null=True, blank=True, help_text="AI explanation for the ranking")
-    
-    class Meta:
-        db_table = 'rule_ranking_sessions'
-    
-    def __str__(self):
-        ai_flag = " 🤖" if self.ai_generated else ""
-        return f"Ranking: {self.name}{ai_flag} ({self.status})"
-
-"""
 # NEW: Model to track AI usage and performance
 class AIUsageLog(models.Model):
     
@@ -265,5 +160,3 @@ class AIUsageLog(models.Model):
     def __str__(self):
         status = "✅" if self.success else "❌"
         return f"AI Usage {status}: {self.endpoint} ({self.total_tokens} tokens)"
-
-"""

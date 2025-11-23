@@ -5,7 +5,7 @@ from django.utils import timezone
 from django.shortcuts import get_object_or_404
 import pandas as pd
 import json
-from .models import RuleAnalysisSession, RuleRelationship
+#from .models import RuleAnalysisSession, RuleRelationship
 from data_management.models import UploadedFile
 from .analyzers import RuleRelationshipAnalyzer
 import io
@@ -14,14 +14,15 @@ from django.shortcuts import get_object_or_404
 from .models import UploadedFile
 from .supabase_utils import get_file_as_string, get_file_as_dataframe
 
+"""
 class RuleAnalysisSessionViewSet(viewsets.ModelViewSet):
-    """ViewSet for rule analysis sessions"""
+    
     queryset = RuleAnalysisSession.objects.all()
     
     def get_serializer_class(self):
         from .serializers import RuleAnalysisSessionSerializer
         return RuleAnalysisSessionSerializer
-
+"""
 def _flatten_relationships(relationships_dict):
     """Convert relationships dictionary to flat list for API response"""
     flattened = []

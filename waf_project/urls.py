@@ -13,7 +13,7 @@ urlpatterns = [
     path('api/', include('rule_analysis.urls')), 
     #path('', include('threshold_tuning.urls')),
     path('api/', include('threshold_tuning.urls')),
-    
+    path('api/', include('optimization_recs_module.urls')),
 ]
 
 # Serve media files in development

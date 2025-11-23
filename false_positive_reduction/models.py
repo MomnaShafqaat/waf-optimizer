@@ -1,5 +1,5 @@
 from django.db import models
-from rule_analysis.models import RuleAnalysisSession
+from optimization_recs_module.models import RuleAnalysisSession
 
 
 class FalsePositiveDetection(models.Model):
