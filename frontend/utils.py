@@ -4,6 +4,8 @@ import streamlit as st
 
 # API URLs
 API_URL = "http://127.0.0.1:8000/api/files/"
+FILES_SUMMARY_URL = "http://127.0.0.1:8000/api/files/summary/"
+HEALTH_URL = "http://127.0.0.1:8000/api/health/"
 RULE_ANALYSIS_API_URL = "http://127.0.0.1:8000/api/analyze/"
 # Sessions endpoint (RuleAnalysisSession ViewSet registered as 'sessions')
 SESSIONS_API_URL = "http://127.0.0.1:8000/api/sessions/"
@@ -23,7 +25,7 @@ WHITELIST_EXPORT_URL = "http://127.0.0.1:8000/api/whitelist/export/"
 def check_backend_status():
     """Check if backend is online"""
     try:
-        response = requests.get(API_URL, timeout=3)
+        response = requests.get(HEALTH_URL, timeout=3)
         return response.status_code == 200
     except:
         return False
@@ -31,8 +33,15 @@ def check_backend_status():
 def get_files_data():
     """Get uploaded files data"""
     try:
-        response = requests.get(API_URL)
-        return response.json() if response.status_code == 200 else []
+        response = requests.get(FILES_SUMMARY_URL)
+        if response.status_code == 200:
+            data = response.json()
+            if isinstance(data, dict) and ('rules' in data or 'traffic' in data):
+                rules = data.get('rules', []) or []
+                traffic = data.get('traffic', []) or []
+                return rules + traffic
+            return data
+        return []
     except:
         return []
 
@@ -89,10 +98,27 @@ def analyze_rules(rules_content, logs_content, analysis_types):
 
 def generate_rule_ranking(rules_file_id, session_name):
     """Generate optimized rule ranking"""
-    data = {"rules_file_id": rules_file_id, "session_name": session_name}
-    
+    # Prefer sending file content rather than ids
     try:
-        response = requests.post(RANKING_API_URL, json=data)
+        import streamlit as st
+        rules_content = None
+        try:
+            rules_content = st.session_state.get('rules_file_content')
+        except Exception:
+            pass
+
+        # Decode bytes to string if necessary
+        if isinstance(rules_content, (bytes, bytearray)):
+            rules_content = rules_content.decode('utf-8')
+
+        payload = {"session_name": session_name}
+        if rules_content:
+            payload['rules_content'] = rules_content
+        else:
+            # fallback to identifier if content missing
+            payload['rules_file_id'] = rules_file_id
+
+        response = requests.post(RANKING_API_URL, json=payload)
         return response
     except Exception as e:
         st.error(f"Ranking generation error: {str(e)}")
@@ -110,7 +136,24 @@ def get_ranking_comparison(session_id):
 def update_performance_data():
     """Update performance data (FR03)"""
     try:
-        response = requests.post(HIT_COUNTS_UPDATE_URL, json={})
+        import streamlit as st
+        # Send file contents instead of IDs
+        rules_content = st.session_state.get('rules_file_content')
+        logs_content = st.session_state.get('logs_file_content')
+
+        # Decode bytes to string if necessary
+        if isinstance(rules_content, (bytes, bytearray)):
+            rules_content = rules_content.decode('utf-8')
+        if isinstance(logs_content, (bytes, bytearray)):
+            logs_content = logs_content.decode('utf-8')
+
+        payload = {}
+        if logs_content:
+            payload['traffic_content'] = logs_content
+        if rules_content:
+            payload['rules_content'] = rules_content
+
+        response = requests.post(HIT_COUNTS_UPDATE_URL, json=payload)
         return response
     except Exception as e:
         st.error(f"Performance update error: {str(e)}")
@@ -135,11 +178,19 @@ def upload_file(file, file_type):
         if response.status_code in [200, 201]:
             return response.json()  # returns dict with 'filename', 'supabase_path', etc.
         else:
-            st.error(f"Upload failed: {response.status_code} {response.text}")
-            return None
+            # Return the error information so the calling function can handle it
+            error_info = {
+                'error': response.text,
+                'status_code': response.status_code
+            }
+            return error_info
     except Exception as e:
-        st.error(f"Upload error: {str(e)}")
-        return None
+        # Return the exception information so the calling function can handle it
+        error_info = {
+            'error': str(e),
+            'status_code': 500
+        }
+        return error_info
 
 def validate_csv_structure(file, file_type):
     """Validate CSV file structure based on file type"""
@@ -186,7 +237,7 @@ def delete_file(filename, file_type):
             'filename': filename,
             'file_type': file_type
         }
-        response = requests.delete(f"{API_URL}delete_by_name/", json=data)
+        response = requests.delete(f"{API_URL}delete_by_name", json=data)
         return response
     except Exception as e:
         st.error(f"Deletion error: {str(e)}")

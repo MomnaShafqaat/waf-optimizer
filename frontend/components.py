@@ -1,9 +1,239 @@
-#false_positive_reduction/component
-import streamlit as st
-import pandas as pd
+
 import plotly.express as px
-import requests
 from utils import *
+import requests
+import pandas as pd
+import streamlit as st
+from datetime import datetime
+
+# API Base URL - FIXED: Use consistent base URL
+API_BASE = "http://127.0.0.1:8000/api"
+
+def update_performance_data(payload):
+    """Send performance analysis data to backend - FIXED"""
+    try:
+        print(f"🔄 Sending performance analysis payload: {payload}")
+        
+        # Validate required fields - FIXED: match backend expectations
+        required_fields = ["rules_file_id", "session_name"]
+        for field in required_fields:
+            if field not in payload:
+                st.error(f"❌ Missing required field: {field}")
+                return None
+        
+        # FIXED: Use the correct endpoint and payload structure
+        response = requests.post(
+            f'{API_BASE}/performance/analyze/',  # Make sure this endpoint exists
+            json=payload,
+            timeout=30
+        )
+        print(f"📊 Performance API Response: {response.status_code}")
+        return response
+    except Exception as e:
+        st.error(f"🚨 Performance analysis API error: {e}")
+        return None
+
+def generate_rule_ranking(rules_file_id, session_name):
+    """Generate optimized rule ranking - FIXED"""
+    try:
+        print(f"🔄 Generating ranking for rules_file_id: {rules_file_id}")
+        
+        # FIXED: Use the exact payload structure backend expects
+        ranking_payload = {
+            "rules_file_id": rules_file_id,
+            "session_name": session_name
+        }
+        
+        # FIXED: Make sure this endpoint exists in your Django URLs
+        response = requests.post(
+            f'{API_BASE}/ranking/generate/',  # Check if this endpoint exists
+            json=ranking_payload,
+            timeout=30
+        )
+        print(f"📈 Ranking API Response: {response.status_code}")
+        return response
+    except Exception as e:
+        st.error(f"🚨 Ranking generation API error: {e}")
+        return None
+def update_hit_counts(traffic_file_id, rules_file_id):
+    """Update hit counts for rules - FIXED"""
+    try:
+        print(f"🔄 Updating hit counts for traffic: {traffic_file_id}, rules: {rules_file_id}")
+        
+        # FIXED: Match backend expected payload - CHANGED as requested
+        hitcount_payload = {
+            "traffic_file_id": traffic_file_id,
+            "rules_file_id": rules_file_id
+        }
+        
+        response = requests.post(
+            f'{API_BASE}/hit-counts/update/',
+            json=hitcount_payload,
+            timeout=30
+        )
+        print(f"🎯 Hit Counts API Response: {response.status_code}")
+        return response
+    except Exception as e:
+        st.error(f"🚨 Hit counts update API error: {e}")
+        return None
+    
+def get_performance_dashboard():
+    """Get performance dashboard data"""
+    try:
+        response = requests.get(f'{API_BASE}/performance/dashboard/', timeout=30)
+        return response
+    except Exception as e:
+        st.error(f"🚨 Dashboard API error: {e}")
+        return None
+
+def get_ranking_comparison(session_id):
+    """Get ranking comparison data"""
+    try:
+        response = requests.get(f'{API_BASE}/ranking/comparison/{session_id}/', timeout=30)
+        return response
+    except Exception as e:
+        st.error(f"🚨 Ranking comparison API error: {e}")
+        return None
+
+# File management functions
+def get_files_data():
+    """Get uploaded files data"""
+    try:
+        response = requests.get(f'{API_BASE}/files/summary/', timeout=30)
+        if response.status_code == 200:
+            data = response.json()
+            # If the summary endpoint returns grouped lists, flatten them
+            if isinstance(data, dict) and ('rules' in data or 'traffic' in data):
+                rules = data.get('rules', []) or []
+                traffic = data.get('traffic', []) or []
+                return rules + traffic
+            # Otherwise assume it's already a flat list
+            return data
+        return []
+    except Exception as e:
+        print(f"🚨 Files API error: {e}")
+        return []
+
+def upload_file(file, file_type):
+    """Upload file to backend"""
+    try:
+        files = {'file': (file.name, file, 'text/csv')}
+        data = {'file_type': file_type}
+        # POST to the files ViewSet endpoint
+        response = requests.post(f'{API_BASE}/files/', files=files, data=data)
+        return response
+    except Exception as e:
+        st.error(f"🚨 Upload error: {e}")
+        return None
+
+def delete_file(file_id):
+    """Delete file from backend"""
+    try:
+        response = requests.delete(f'{API_BASE}/files/{file_id}/')
+        return response
+    except Exception as e:
+        st.error(f"🚨 Delete error: {e}")
+        return None
+
+def validate_csv_structure(file, file_type):
+    """Validate CSV structure"""
+    try:
+        file.seek(0)
+        df = pd.read_csv(file)
+        
+        if file_type == 'rules':
+            required_columns = ['id', 'category', 'parameter', 'operator', 'value', 'phase', 'action', 'priority']
+        elif file_type == 'traffic':
+            required_columns = ['timestamp', 'src_ip', 'method', 'url']
+        else:
+            return False, "Unknown file type"
+        
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        if missing_columns:
+            return False, f"Missing columns: {missing_columns}"
+        
+        return True, "Valid CSV structure"
+    except Exception as e:
+        return False, f"Error reading CSV: {str(e)}"
+
+def analyze_rules(rules_file_id, traffic_file_id, analysis_types):
+    """Analyze rule relationships"""
+    try:
+        payload = {
+            "rules_file_id": rules_file_id,
+            "traffic_file_id": traffic_file_id,
+            "analysis_types": analysis_types
+        }
+        response = requests.post(f'{API_BASE}/analyze/', json=payload)
+        return response
+    except Exception as e:
+        st.error(f"🚨 Analysis error: {e}")
+        return None
+
+# FR04 False Positive Functions
+def detect_false_positives_api(session_id, detection_method, threshold):
+    """Detect false positives"""
+    try:
+        payload = {
+            "session_id": session_id,
+            "detection_method": detection_method,
+            "false_positive_threshold": threshold
+        }
+        response = requests.post(f'{API_BASE}/false-positives/detect/', json=payload)
+        return response
+    except Exception as e:
+        st.error(f"🚨 False positive detection error: {e}")
+        return None
+
+def start_learning_mode_api(session_id, duration, sample_size):
+    """Start learning mode"""
+    try:
+        payload = {
+            "session_id": session_id,
+            "learning_duration_hours": duration,
+            "traffic_sample_size": sample_size
+        }
+        response = requests.post(f'{API_BASE}/learning-mode/start/', json=payload)
+        return response
+    except Exception as e:
+        st.error(f"🚨 Learning mode error: {e}")
+        return None
+
+def generate_whitelist_suggestions_api(false_positive_id, suggestion_types):
+    """Generate whitelist suggestions"""
+    try:
+        payload = {
+            "false_positive_id": false_positive_id,
+            "suggestion_types": suggestion_types
+        }
+        response = requests.post(f'{API_BASE}/whitelist-suggestions/generate/', json=payload)
+        return response
+    except Exception as e:
+        st.error(f"🚨 Whitelist suggestions error: {e}")
+        return None
+
+def export_whitelist_csv_api(session_id, export_name, include_patterns):
+    """Export whitelist CSV"""
+    try:
+        payload = {
+            "session_id": session_id,
+            "export_name": export_name,
+            "include_patterns": include_patterns
+        }
+        response = requests.post(f'{API_BASE}/whitelist/export-csv/', json=payload)
+        return response
+    except Exception as e:
+        st.error(f"🚨 Whitelist export error: {e}")
+        return None
+
+def get_learning_mode_status_api(learning_session_id):
+    """Get learning mode status"""
+    try:
+        response = requests.get(f'{API_BASE}/learning-mode/status/{learning_session_id}/')
+        return response
+    except Exception as e:
+        st.error(f"🚨 Learning mode status error: {e}")
+        return None
 
 # frontend/components/threshold_tuning.py
 def threshold_tuning_module():
@@ -202,9 +432,10 @@ def render_header():
         </div>
         </div>
         """, unsafe_allow_html=True)
+
     
 def render_threshold_tuning():
-    """Threshold Tuning Module for FR04 - False Positive Reduction"""
+    """Threshold Tuning Module for FR04 - False Positive Reduction - FIXED"""
     st.markdown('<div class="card">', unsafe_allow_html=True)
     
     # Header with gradient
@@ -224,29 +455,55 @@ def render_threshold_tuning():
         st.markdown("### 📊 Run Threshold Analysis")
         st.write("Analyze uploaded traffic logs to find optimal anomaly score threshold")
         
-        if st.button("🚀 Run Threshold Tuning", type="primary", use_container_width=True):
-            with st.spinner("Analyzing traffic patterns and finding optimal threshold..."):
-                try:
-                    # CHANGED: Using GET instead of POST to avoid CSRF
-                    response = requests.get('http://127.0.0.1:8000/api/threshold_tuning/', timeout=30)
-                    
-                    if response.status_code == 200:
-                        result = response.json()
-                        st.success("✅ Threshold tuning completed successfully!")
-                        display_threshold_results(result)
-                    else:
-                        st.error(f"❌ Analysis failed: {response.status_code}")
-                        st.write(f"**Error:** {response.text[:200]}...")
+        # File selection for threshold tuning
+        files_data = st.session_state.get('files_data', [])
+        traffic_files = [f for f in files_data if f['file_type'] == 'traffic']
+        
+        if traffic_files:
+            selected_traffic = st.selectbox(
+                "Select Traffic File for Analysis:",
+                options=traffic_files,
+                format_func=lambda x: x.get('filename', x.get('file', 'Unknown File')),
+                key="threshold_traffic_select"
+            )
+            
+            if st.button("🚀 Run Threshold Tuning", type="primary", use_container_width=True):
+                with st.spinner("Analyzing traffic patterns and finding optimal threshold..."):
+                    try:
+                        # FIXED: Use the correct API endpoint with proper payload
+                        payload = {
+                            "traffic_file_id": selected_traffic['id']
+                        }
+                        response = requests.post(
+                            f'{API_BASE}/threshold_tuning/',  # FIXED: Use API_BASE
+                            json=payload,
+                            timeout=30
+                        )
                         
-                except Exception as e:
-                    st.error(f"🚨 Connection error: {str(e)}")
+                        if response.status_code == 200:
+                            result = response.json()
+                            st.success("✅ Threshold tuning completed successfully!")
+                            
+                            # Display results
+                            display_threshold_results(result)
+                            
+                        else:
+                            error_msg = response.json().get('error', 'Unknown error')
+                            st.error(f"❌ Analysis failed: {error_msg}")
+                            
+                    except Exception as e:
+                        st.error(f"🚨 Connection error: {str(e)}")
+                        st.info("💡 Make sure Django backend is running on port 8000")
+        else:
+            st.warning("Please upload traffic files first")
     
     with col2:
         st.markdown("### ⚙️ Settings")
         st.info("""
-        **API Endpoint:**
-        `GET http://127.0.0.1:8000/api/threshold_tuning/`
-        
+        **Input Requirements:**
+        - CSV files with traffic data
+        - Must contain `anomaly_score` column
+        - Must contain `action` column
         """)
     
     # Display existing suggestions
@@ -255,12 +512,13 @@ def render_threshold_tuning():
     st.markdown('</div>', unsafe_allow_html=True)
 
 def display_existing_suggestions():
-    """Display existing threshold suggestions"""
+    """Display existing threshold suggestions - FIXED"""
     st.markdown("---")
     st.markdown("### 💾 Saved Suggestions")
     
     try:
-        response = requests.get('http://127.0.0.1:8000/api/threshold_suggestions/')
+        # FIXED: Use API_BASE consistently
+        response = requests.get(f'{API_BASE}/threshold_suggestions/')
         
         if response.status_code == 200:
             data = response.json()
@@ -287,21 +545,26 @@ def display_existing_suggestions():
                     use_container_width=True
                 )
                 
-                # Approval and Delete functionality
-                st.markdown("#### 🔧 Manage Suggestions")
-                all_suggestions = {f"ID {s['id']}: Threshold {s['value']}": s['id'] for s in suggestions}
+                # Approval functionality
+                st.markdown("#### ✅ Approve Suggestions")
+                pending_suggestions = [s for s in suggestions if not s['approved']]
                 
-                selected_suggestion = st.selectbox(
-                    "Choose suggestion to manage:",
-                    options=list(all_suggestions.keys())
-                )
-                
-                col1, col2 = st.columns([1, 1])
-                with col1:
-                    if st.button("👍 Approve Selected", type="primary", use_container_width=True):
-                        suggestion_id = all_suggestions[selected_suggestion]
+                if pending_suggestions:
+                    suggestion_options = {
+                        f"ID {s['id']}: Threshold {s['value']}": s['id'] 
+                        for s in pending_suggestions
+                    }
+                    
+                    selected_suggestion = st.selectbox(
+                        "Choose suggestion to approve:",
+                        options=list(suggestion_options.keys())
+                    )
+                    
+                    if st.button("👍 Approve Selected Suggestion", type="primary"):
+                        suggestion_id = suggestion_options[selected_suggestion]
+                        # FIXED: Use API_BASE
                         approve_response = requests.post(
-                            f'http://127.0.0.1:8000/api/threshold_suggestions/approve/{suggestion_id}/'
+                            f'{API_BASE}/threshold_suggestions/approve/{suggestion_id}/'
                         )
                         
                         if approve_response.status_code == 200:
@@ -309,38 +572,14 @@ def display_existing_suggestions():
                             st.rerun()
                         else:
                             st.error("❌ Approval failed")
-                
-                with col2:
-                    if st.button("🗑️ Delete Selected", type="secondary", use_container_width=True):
-                        suggestion_id = all_suggestions[selected_suggestion]
-                        
-                        # Confirm deletion
-                        with st.expander("⚠️ Confirm Deletion", expanded=True):
-                            st.warning(f"Are you sure you want to delete suggestion {suggestion_id}?")
-                            col1, col2 = st.columns(2)
-                            with col1:
-                                if st.button("✅ Yes, Delete", type="primary"):
-                                    try:
-                                        delete_response = requests.post(
-                                            f'http://127.0.0.1:8000/api/threshold_suggestions/delete/{suggestion_id}/'
-                                        )
-                                        
-                                        if delete_response.status_code == 200:
-                                            st.success("🗑️ Suggestion deleted successfully!")
-                                            st.rerun()
-                                        else:
-                                            st.error(f"❌ Delete failed: {delete_response.text}")
-                                    except Exception as e:
-                                        st.error(f"🚨 Delete error: {str(e)}")
-                            with col2:
-                                if st.button("❌ Cancel"):
-                                    st.info("Deletion cancelled")
+                else:
+                    st.info("🎉 All suggestions are already approved!")
                     
             else:
                 st.info("📝 No threshold suggestions yet. Run analysis first.")
                 
         else:
-            st.error(f"❌ Failed to load suggestions: {response.status_code}")
+            st.error("❌ Failed to load suggestions")
             
     except Exception as e:
         st.error(f"🚨 Error loading suggestions: {str(e)}")
@@ -508,9 +747,17 @@ def render_rule_analysis():
         if rules_files and traffic_files:
             col1, col2 = st.columns(2)
             with col1:
-                selected_rules = st.selectbox("Rules File:", options=rules_files, format_func=lambda x: x['file'].split('/')[-1])
+                selected_rules = st.selectbox(
+                    "Rules File:",
+                    options=rules_files,
+                    format_func=lambda x: (x.get('filename') or x.get('supabase_path') or str(x.get('id', ''))).split('/')[-1]
+                )
             with col2:
-                selected_traffic = st.selectbox("Traffic File:", options=traffic_files, format_func=lambda x: x['file'].split('/')[-1])
+                selected_traffic = st.selectbox(
+                    "Traffic File:",
+                    options=traffic_files,
+                    format_func=lambda x: (x.get('filename') or x.get('supabase_path') or str(x.get('id', ''))).split('/')[-1]
+                )
             
             analysis_types = st.multiselect(
                 "Analysis Types:",
@@ -898,83 +1145,147 @@ def display_analysis_results(results):
             st.markdown("---")
     
     st.markdown('</div>', unsafe_allow_html=True)
-
 def render_performance_profiling():
-    """FR03: Performance Profiling Section"""
+    """FR03: Performance Profiling Section - COMPATIBLE VERSION"""
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.header("📊 Performance Profiling")
     st.write("Analyze rule efficiency and identify optimization opportunities")
     
+    # Get available files
+    files_data = st.session_state.get('files_data', [])
+    traffic_files = [f for f in files_data if f['file_type'] == 'traffic']
+    rules_files = [f for f in files_data if f['file_type'] == 'rules']
+    
+    if not traffic_files or not rules_files:
+        st.warning("📁 Please upload both traffic and rules files first.")
+        st.markdown('</div>', unsafe_allow_html=True)
+        return
+    
     col1, col2 = st.columns(2)
     with col1:
-        traffic_files = [f for f in st.session_state.get('files_data', []) if f['file_type'] == 'traffic']
         selected_traffic = st.selectbox(
             "Select Traffic Data:",
             options=traffic_files,
-            format_func=lambda x: x['file'].split('/')[-1],
+            format_func=lambda x: x.get('filename', x.get('file', 'Unknown File')),
             key="performance_traffic_select"
         )
     with col2:
-        snapshot_name = st.text_input("Analysis Name:", "Performance Analysis", key="snapshot_name")
+        selected_rules = st.selectbox(
+            "Select Rules Configuration:",
+            options=rules_files,
+            format_func=lambda x: x.get('filename', x.get('file', 'Unknown File')),
+            key="performance_rules_select"
+        )
+    
+    snapshot_name = st.text_input("Analysis Name:", "Performance Analysis", key="snapshot_name")
     
     if st.button("🔍 Analyze Rule Performance", type="primary", key="analyze_performance"):
-        if selected_traffic:
+        if selected_traffic and selected_rules:
             with st.spinner("🔄 Analyzing rule performance patterns..."):
-                response = update_performance_data()
+                # FIXED: Proper payload structure that matches backend
+                payload = {
+                    "traffic_file_id": selected_traffic['id'],
+                    "rules_file_id": selected_rules['id'],
+                    "snapshot_name": snapshot_name
+                }
+                
+                response = update_performance_data(payload)
                 
                 if response and response.status_code == 200:
                     result = response.json()
-                    st.success(f"✅ {result['message']}")
+                    st.success("✅ Performance analysis completed successfully!")
                     
-                    # Show summary
-                    summary = result['summary']
+                    # Display results
+                    summary = result.get('analysis_summary', {})
                     col1, col2, col3, col4 = st.columns(4)
                     with col1:
-                        st.metric("Total Requests", summary['total_requests'])
+                        st.metric("Total Rules Analyzed", summary.get('total_rules_analyzed', 0))
                     with col2:
-                        st.metric("Rules Triggered", summary['rules_triggered'])
+                        st.metric("Rarely Used", summary.get('rarely_used_rules', 0))
                     with col3:
-                        st.metric("Hits Updated", summary['hits_updated'])
+                        st.metric("Redundant", summary.get('redundant_rules', 0))
                     with col4:
-                        st.metric("Metrics Calculated", summary['metrics_calculated'])
+                        st.metric("High Performers", summary.get('high_performance_rules', 0))
                     
-                    # Show flagged rules
-                    flagged = result.get('flagged_rules', {})
-                    if flagged:
-                        st.subheader("🚩 Flagged Rules")
-                        col1, col2, col3 = st.columns(3)
-                        with col1:
-                            if flagged.get('rarely_used'):
-                                st.metric("Rarely Used", len(flagged['rarely_used']), delta="Optimize")
-                        with col2:
-                            if flagged.get('redundant'):
-                                st.metric("Redundant", len(flagged['redundant']), delta="Review")
-                        with col3:
-                            if flagged.get('high_performance'):
-                                st.metric("High Performers", len(flagged['high_performance']), delta="Excellent")
-                        
-                        # Show details of flagged rules
-                        with st.expander("View Flagged Rule Details"):
-                            for category, rules in flagged.items():
-                                if rules:
-                                    st.write(f"**{category.upper().replace('_', ' ')}:**")
-                                    for rule in rules:
-                                        st.write(f"- {rule['rule_id']}: {rule.get('reason', 'No reason provided')}")
+                else:
+                    error_msg = "Unknown error"
+                    if response:
+                        try:
+                            error_data = response.json()
+                            error_msg = error_data.get('error', response.text[:200])
+                        except:
+                            error_msg = response.text[:200] if response.text else "No response content"
+                    st.error(f"❌ Performance analysis failed: {error_msg}")
+        else:
+            st.warning("⚠️ Please select both traffic and rules files")
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+
+
+def render_rule_ranking():
+    """Rule Ranking Section - COMPATIBLE VERSION"""
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.header("⚡ Performance Optimization")
+    st.write("Intelligent rule reordering based on performance data")
+    
+    # Get available files
+    files_data = st.session_state.get('files_data', [])
+    rules_files = [f for f in files_data if f['file_type'] == 'rules']
+    
+    if not rules_files:
+        st.warning("📁 Please upload rules files first.")
+        st.markdown('</div>', unsafe_allow_html=True)
+        return
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        selected_rules = st.selectbox(
+            "Select Rules Configuration:",
+            options=rules_files,
+            format_func=lambda x: x.get('filename', x.get('file', 'Unknown File')),
+            key="ranking_rules_select"
+        )
+    with col2:
+        session_name = st.text_input("Session Name:", "Optimization Analysis", key="session_name")
+    
+    if st.button("🚀 Generate Optimized Ranking", type="primary", key="generate_ranking"):
+        if selected_rules:
+            with st.spinner("🔄 Analyzing and optimizing rule order..."):
+                # FIXED: Pass rules_file_id correctly
+                response = generate_rule_ranking(selected_rules['id'], session_name)
+                
+                if response and response.status_code == 200:
+                    result = response.json()
+                    st.success("✅ Rule ranking generated successfully!")
                     
-                    # Show performance metrics
-                    metrics = result.get('performance_metrics', {})
-                    if metrics:
-                        st.subheader("📈 Performance Metrics")
-                        metrics_df = pd.DataFrame.from_dict(metrics, orient='index').reset_index()
-                        metrics_df.columns = ['Rule ID', 'Match Frequency', 'Effectiveness Ratio', 'Hit Count']
-                        metrics_df['Match Frequency'] = metrics_df['Match Frequency'].apply(lambda x: f"{x:.2%}")
-                        metrics_df['Effectiveness Ratio'] = metrics_df['Effectiveness Ratio'].apply(lambda x: f"{x:.1%}")
-                        st.dataframe(metrics_df, use_container_width=True)
+                    # Display results
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("Performance Gain", f"{result.get('improvement', 0):.1f}%")
+                    with col2:
+                        st.metric("Rules Processed", result.get('rules_analyzed', 0))
+                    with col3:
+                        st.metric("Session ID", result.get('session_id', 'N/A'))
+                    
+                    # Store session for visualization
+                    st.session_state.current_ranking_session = result.get('session_id')
+                    
+                    # Show visualization immediately
+                    if st.session_state.current_ranking_session:
+                        show_ranking_visualization(st.session_state.current_ranking_session)
                         
                 else:
-                    st.error("❌ Performance analysis failed")
+                    error_msg = "Unknown error"
+                    if response:
+                        try:
+                            error_data = response.json()
+                            error_msg = error_data.get('error', response.text[:200])
+                        except:
+                            error_msg = response.text[:200] if response.text else "No response content"
+                    
+                    st.error(f"❌ Optimization failed: {error_msg}")
         else:
-            st.warning("Please select traffic data for analysis")
+            st.warning("⚠️ Please select a rules configuration")
     
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -1027,51 +1338,8 @@ def render_performance_dashboard():
     
     st.markdown('</div>', unsafe_allow_html=True)
 
-def render_rule_ranking():
-    """Rule Ranking Section"""
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.header("⚡ Performance Optimization")
-    st.write("Intelligent rule reordering based on performance data")
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        rules_files = [f for f in st.session_state.get('files_data', []) if f['file_type'] == 'rules']
-        selected_rules = st.selectbox(
-            "Select Rules Configuration:",
-            options=rules_files,
-            format_func=lambda x: x['file'].split('/')[-1],
-            key="ranking_rules_select"
-        )
-    with col2:
-        session_name = st.text_input("Session Name:", "Optimization Analysis", key="session_name")
-    
-    if st.button("🚀 Generate Optimized Ranking", type="primary", key="generate_ranking"):
-        if selected_rules:
-            with st.spinner("🔄 Analyzing and optimizing rule order..."):
-                response = generate_rule_ranking(selected_rules['id'], session_name)
-                
-                if response and response.status_code == 200:
-                    result = response.json()
-                    st.success(f"✅ {result['message']}")
-                    
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        st.metric("Performance Gain", f"{result['improvement']}%")
-                    with col2:
-                        st.metric("Rules Processed", result['rules_analyzed'])
-                    with col3:
-                        st.metric("Session ID", result['session_id'])
-                    
-                    st.session_state.current_ranking_session = result['session_id']
-                else:
-                    st.error("❌ Optimization failed")
-        else:
-            st.warning("Please select a rules configuration")
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-
 def show_ranking_visualization(session_id):
-    """Enhanced ranking visualization"""
+    """Enhanced ranking visualization with proper table display"""
     st.markdown('<div class="card">', unsafe_allow_html=True)
     st.header("📈 Optimization Results")
     
@@ -1083,97 +1351,126 @@ def show_ranking_visualization(session_id):
             # Enhanced metrics
             col1, col2, col3, col4 = st.columns(4)
             with col1:
-                st.metric("Performance Gain", f"{comparison_data['improvement']:.1f}%")
+                st.metric("Performance Gain", f"{comparison_data.get('improvement', 0):.1f}%")
             with col2:
-                st.metric("Rules Improved", comparison_data['summary']['rules_moved_up'])
+                st.metric("Rules Improved", comparison_data.get('summary', {}).get('rules_moved_up', 0))
             with col3:
-                st.metric("Rules Adjusted", comparison_data['summary']['rules_moved_down'])
+                st.metric("Rules Adjusted", comparison_data.get('summary', {}).get('rules_moved_down', 0))
             with col4:
-                st.metric("Avg Change", f"{comparison_data['summary']['average_position_change']:+.1f}")
+                st.metric("Avg Change", f"{comparison_data.get('summary', {}).get('average_position_change', 0):+.1f}")
             
-            if comparison_data['comparison_data']:
+            # Check if comparison_data exists and has data
+            if comparison_data.get('comparison_data'):
                 df = pd.DataFrame(comparison_data['comparison_data'])
                 
-                # Enhanced visualization
-                fig = px.scatter(
-                    df,
-                    x='current_position',
-                    y='proposed_position',
-                    size='hit_count',
-                    color='position_change',
-                    hover_data=['rule_id', 'priority_score', 'category'],
-                    title='Rule Position Optimization',
-                    labels={
-                        'current_position': 'Current Position',
-                        'proposed_position': 'Optimized Position',
-                        'position_change': 'Improvement',
-                        'hit_count': 'Usage Frequency'
-                    }
-                )
-                
-                max_pos = max(df['current_position'].max(), df['proposed_position'].max())
-                fig.add_trace(px.line(x=[1, max_pos], y=[1, max_pos]).data[0])
-                fig.data[-1].line.dash = 'dash'
-                fig.data[-1].line.color = '#94a3b8'
-                fig.data[-1].name = 'Reference'
-                
-                st.plotly_chart(fig, use_container_width=True)
-                
-                st.info(f"💡 **Performance Insight:** Optimized rule order can improve processing speed by approximately {comparison_data['improvement']:.1f}%")
-                
-                # Add detailed table view of reordered rules
-                st.subheader("📋 Detailed Rule Reordering")
+                # Display the ranking table immediately
+                st.subheader("📋 Optimized Rule Order")
                 
                 # Create display dataframe with better formatting
                 display_df = df.copy()
-                display_df = display_df.sort_values('proposed_position')
-                display_df['Position Change'] = display_df['position_change'].apply(
-                    lambda x: f"↑ {abs(x)}" if x > 0 else (f"↓ {abs(x)}" if x < 0 else "→ 0")
-                )
-                display_df['Status'] = display_df.apply(
-                    lambda row: '🔥 High Performance' if row.get('is_high_performance', False) 
-                    else ('⚠️ Rarely Used' if row.get('is_rarely_used', False) else '✓ Normal'),
-                    axis=1
-                )
                 
-                # Select and rename columns for display
-                columns_to_show = {
-                    'rule_id': 'Rule ID',
-                    'current_position': 'Original Position',
-                    'proposed_position': 'New Position',
-                    'Position Change': 'Change',
-                    'hit_count': 'Hit Count',
-                    'priority_score': 'Priority Score',
-                    'category': 'Category',
-                    'Status': 'Status'
-                }
+                # Ensure we have the required columns
+                if 'current_position' in display_df.columns and 'proposed_position' in display_df.columns:
+                    display_df = display_df.sort_values('proposed_position')
+                    
+                    # Calculate position changes
+                    display_df['Position Change'] = display_df.apply(
+                        lambda row: f"↑ {abs(row['proposed_position'] - row['current_position'])}" 
+                        if row['proposed_position'] < row['current_position'] 
+                        else (f"↓ {abs(row['proposed_position'] - row['current_position'])}" 
+                              if row['proposed_position'] > row['current_position'] 
+                              else "→ 0"),
+                        axis=1
+                    )
+                    
+                    # Add status indicators
+                    display_df['Status'] = display_df.apply(
+                        lambda row: '🔥 High Performance' if row.get('hit_count', 0) > 10 
+                        else ('⚠️ Rarely Used' if row.get('hit_count', 0) <= 2 else '✓ Normal'),
+                        axis=1
+                    )
+                    
+                    # Select and rename columns for display
+                    columns_mapping = {}
+                    if 'rule_id' in display_df.columns:
+                        columns_mapping['rule_id'] = 'Rule ID'
+                    if 'current_position' in display_df.columns:
+                        columns_mapping['current_position'] = 'Original Position'
+                    if 'proposed_position' in display_df.columns:
+                        columns_mapping['proposed_position'] = 'New Position'
+                    if 'Position Change' in display_df.columns:
+                        columns_mapping['Position Change'] = 'Change'
+                    if 'hit_count' in display_df.columns:
+                        columns_mapping['hit_count'] = 'Hit Count'
+                    if 'priority_score' in display_df.columns:
+                        columns_mapping['priority_score'] = 'Priority Score'
+                    if 'category' in display_df.columns:
+                        columns_mapping['category'] = 'Category'
+                    if 'Status' in display_df.columns:
+                        columns_mapping['Status'] = 'Status'
+                    
+                    # Filter to only include columns that exist
+                    existing_columns = [col for col in columns_mapping.keys() if col in display_df.columns]
+                    table_df = display_df[existing_columns].rename(columns=columns_mapping)
+                    
+                    st.dataframe(
+                        table_df,
+                        use_container_width=True,
+                        height=400
+                    )
+                    
+                    # Add download button for the ranking
+                    csv = table_df.to_csv(index=False)
+                    st.download_button(
+                        label="📥 Download Optimized Rule Order",
+                        data=csv,
+                        file_name=f"optimized_rules_session_{session_id}.csv",
+                        mime="text/csv"
+                    )
+                else:
+                    st.warning("No position data available in the ranking results")
                 
-                # Filter to only include columns that exist
-                existing_columns = [col for col in columns_to_show.keys() if col in display_df.columns]
-                table_df = display_df[existing_columns].rename(columns=columns_to_show)
+                # Enhanced visualization (only if we have position data)
+                if 'current_position' in df.columns and 'proposed_position' in df.columns:
+                    st.subheader("📊 Rule Position Optimization Chart")
+                    fig = px.scatter(
+                        df,
+                        x='current_position',
+                        y='proposed_position',
+                        size='hit_count' if 'hit_count' in df.columns else None,
+                        color='position_change' if 'position_change' in df.columns else None,
+                        hover_data=['rule_id', 'priority_score', 'category'] if all(col in df.columns for col in ['rule_id', 'priority_score', 'category']) else None,
+                        title='Rule Position Optimization',
+                        labels={
+                            'current_position': 'Current Position',
+                            'proposed_position': 'Optimized Position',
+                            'position_change': 'Improvement',
+                            'hit_count': 'Usage Frequency'
+                        }
+                    )
+                    
+                    max_pos = max(df['current_position'].max(), df['proposed_position'].max())
+                    fig.add_trace(px.line(x=[1, max_pos], y=[1, max_pos]).data[0])
+                    fig.data[-1].line.dash = 'dash'
+                    fig.data[-1].line.color = '#94a3b8'
+                    fig.data[-1].name = 'Reference'
+                    
+                    st.plotly_chart(fig, use_container_width=True)
+                    
+            else:
+                st.info("No detailed comparison data available. The optimization was completed successfully.")
                 
-                st.dataframe(
-                    table_df,
-                    use_container_width=True,
-                    height=400
-                )
-                
-                # Add download button for the ranking
-                csv = table_df.to_csv(index=False)
-                st.download_button(
-                    label="📥 Download Optimized Rule Order",
-                    data=csv,
-                    file_name=f"optimized_rules_session_{session_id}.csv",
-                    mime="text/csv"
-                )
+            st.info(f"💡 **Performance Insight:** Optimized rule order can improve processing speed by approximately {comparison_data.get('improvement', 0):.1f}%")
     
     except Exception as e:
         st.error(f"Error loading visualization: {str(e)}")
-        import traceback
-        st.code(traceback.format_exc())
+        # Show a simplified view if the detailed data isn't available
+        st.info("Showing basic optimization results...")
+        st.metric("Performance Improvement", f"{comparison_data.get('improvement', 0):.1f}%")
+        st.metric("Total Rules Processed", comparison_data.get('rules_analyzed', 0))
     
     st.markdown('</div>', unsafe_allow_html=True)
-
+    
 def display_enhanced_metrics(metrics_data):
     """Display metrics with enhanced dark theme design"""
     cols = st.columns(len(metrics_data))
@@ -1253,18 +1550,24 @@ def render_false_positive_detection():
             # --- Step 1: Select Files (same layout as Rule Analysis) ---
             st.markdown("### File Selection")
             col1, col2 = st.columns(2)
+            def _format_file_entry(x):
+                # Accept multiple possible keys depending on source: 'file', 'filename', 'name'
+                if isinstance(x, dict):
+                    return x.get('file') or x.get('filename') or x.get('name') or str(x)
+                return str(x)
+
             with col1:
                 selected_rules = st.selectbox(
                     "Select Rules File:",
                     options=rules_files,
-                    format_func=lambda x: x['file'].split('/')[-1],
+                    format_func=_format_file_entry,
                     key="fp_rules_select"
                 )
             with col2:
                 selected_traffic = st.selectbox(
                     "Select Traffic File:",
                     options=traffic_files,
-                    format_func=lambda x: x['file'].split('/')[-1],
+                    format_func=_format_file_entry,
                     key="fp_traffic_select"
                 )
 
@@ -1604,7 +1907,7 @@ def render_file_deletion():
 
         # Dropdown options: show ID, filename, and file type
         file_options = [
-            f"ID {f['id']}: {f['file'].split('/')[-1]} ({f['file_type']})"
+            f"ID {f['id']}: {(f.get('filename') or f.get('supabase_path') or '').split('/')[-1]} ({f.get('file_type')})"
             for f in data
         ]
 

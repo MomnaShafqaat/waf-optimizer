@@ -28,77 +28,127 @@ def render_file_management():
             upload_success = True
             uploaded_files = []
             
+            def is_duplicate_error(error_data):
+                """Check if error indicates duplicate file"""
+                if not error_data:
+                    return False
+                
+                error_str = str(error_data)
+                
+                # Check direct string indicators
+                if any(indicator in error_str for indicator in ['409', 'Duplicate', 'already exists']):
+                    return True
+                
+                # Try to parse nested JSON error
+                try:
+                    # The error might be a string containing JSON
+                    if error_str.startswith('{') and error_str.endswith('}'):
+                        import json
+                        parsed_error = json.loads(error_str.replace("'", '"'))
+                        if parsed_error.get('statusCode') == 409:
+                            return True
+                        if 'duplicate' in str(parsed_error.get('message', '')).lower():
+                            return True
+                except:
+                    pass
+                
+                return False
+            
             # Upload rules file if provided
             if rules_file:
                 with st.spinner(f"Uploading {rules_file.name}..."):
-                    # Validate file structure
-                    is_valid, message = validate_csv_structure(rules_file, 'rules')
-                    if not is_valid:
-                        st.error(f"❌ Rules file validation failed: {message}")
-                        upload_success = False
-                    else:
-                        # Upload the file
-                        response = upload_file(rules_file, 'rules')
-                        
-                        # Handle different response types and error cases
-                        if response and isinstance(response, dict) and response.get('id'):
-                            st.success(f"✅ Successfully uploaded {rules_file.name}")
-                            uploaded_files.append(f"{rules_file.name} (Rules)")
-                        elif response and isinstance(response, dict) and response.get('error'):
-                            # Handle specific error cases - the error is a string containing the actual error dict
-                            error_msg = str(response.get('error', ''))
-                            
-                            # Debug: Show what we're actually getting
-                            st.write("Debug - Raw error:", error_msg)
-                            
-                            # Check for duplicate file error (nested in string)
-                            if any(indicator in error_msg for indicator in ['409', 'Duplicate', 'already exists', 'resource already exists']):
-                                st.warning(f"⚠️ File '{rules_file.name}' already exists in the system. Please use a different filename or delete the existing file first.")
-                            else:
-                                st.error(f"❌ Failed to upload {rules_file.name}: {error_msg}")
+                    try:
+                        # Validate file structure
+                        is_valid, message = validate_csv_structure(rules_file, 'rules')
+                        if not is_valid:
+                            st.error(f"❌ Rules file validation failed: {message}")
                             upload_success = False
                         else:
-                            st.error(f"❌ Failed to upload {rules_file.name} - No valid response from server")
-                            upload_success = False
+                            # Upload the file
+                            response = upload_file(rules_file, 'rules')
+                            
+                            # Handle response - check if it's a success response or error response
+                            if response and isinstance(response, dict):
+                                if response.get('id') or response.get('filename'):
+                                    # Success case
+                                    st.success(f"✅ Successfully uploaded {rules_file.name}")
+                                    uploaded_files.append(f"{rules_file.name} (Rules)")
+                                elif response.get('error'):
+                                    # Error case returned from upload_file
+                                    error_msg = response['error']
+                                    status_code = response.get('status_code', 'Unknown')
+                                    
+                                    # Handle duplicate file error
+                                    if is_duplicate_error(error_msg) or status_code == 409:
+                                        st.warning(f"⚠️ File '{rules_file.name}' already exists. Please use a different filename or delete the existing file first.")
+                                        upload_success = False
+                                    else:
+                                        st.error(f"❌ Failed to upload {rules_file.name} (Status {status_code}): {error_msg}")
+                                        upload_success = False
+                                else:
+                                    st.error(f"❌ Unexpected response format for {rules_file.name}: {response}")
+                                    upload_success = False
+                            else:
+                                st.error(f"❌ No valid response from server for {rules_file.name}")
+                                upload_success = False
+                    except Exception as e:
+                        error_str = str(e)
+                        if is_duplicate_error(error_str):
+                            st.warning(f"⚠️ File '{rules_file.name}' already exists. Please use a different filename or delete the existing file first.")
+                        else:
+                            st.error(f"❌ Unexpected error uploading {rules_file.name}: {error_str}")
+                        upload_success = False
             
             # Upload traffic file if provided
             if traffic_file:
                 with st.spinner(f"Uploading {traffic_file.name}..."):
-                    # Validate file structure
-                    is_valid, message = validate_csv_structure(traffic_file, 'traffic')
-                    if not is_valid:
-                        st.error(f"❌ Traffic file validation failed: {message}")
-                        upload_success = False
-                    else:
-                        # Upload the file
-                        response = upload_file(traffic_file, 'traffic')
-                        
-                        # Handle different response types and error cases
-                        if response and isinstance(response, dict) and response.get('id'):
-                            st.success(f"✅ Successfully uploaded {traffic_file.name}")
-                            uploaded_files.append(f"{traffic_file.name} (Traffic)")
-                        elif response and isinstance(response, dict) and response.get('error'):
-                            # Handle specific error cases - the error is a string containing the actual error dict
-                            error_msg = str(response.get('error', ''))
-                            
-                            # Check for duplicate file error (nested in string)
-                            if any(indicator in error_msg for indicator in ['409', 'Duplicate', 'already exists', 'resource already exists']):
-                                st.warning(f"⚠️ File '{traffic_file.name}' already exists in the system. Please use a different filename or delete the existing file first.")
-                            else:
-                                st.error(f"❌ Failed to upload {traffic_file.name}: {error_msg}")
+                    try:
+                        # Validate file structure
+                        is_valid, message = validate_csv_structure(traffic_file, 'traffic')
+                        if not is_valid:
+                            st.error(f"❌ Traffic file validation failed: {message}")
                             upload_success = False
                         else:
-                            st.error(f"❌ Failed to upload {traffic_file.name} - No valid response from server")
-                            upload_success = False
+                            # Upload the file
+                            response = upload_file(traffic_file, 'traffic')
+                            
+                            # Handle response - check if it's a success response or error response
+                            if response and isinstance(response, dict):
+                                if response.get('id') or response.get('filename'):
+                                    # Success case
+                                    st.success(f"✅ Successfully uploaded {traffic_file.name}")
+                                    uploaded_files.append(f"{traffic_file.name} (Traffic)")
+                                elif response.get('error'):
+                                    # Error case returned from upload_file
+                                    error_msg = response['error']
+                                    status_code = response.get('status_code', 'Unknown')
+                                    
+                                    # Handle duplicate file error
+                                    if is_duplicate_error(error_msg) or status_code == 409:
+                                        st.warning(f"⚠️ File '{traffic_file.name}' already exists. Please use a different filename or delete the existing file first.")
+                                        upload_success = False
+                                    else:
+                                        st.error(f"❌ Failed to upload {traffic_file.name} (Status {status_code}): {error_msg}")
+                                        upload_success = False
+                                else:
+                                    st.error(f"❌ Unexpected response format for {traffic_file.name}: {response}")
+                                    upload_success = False
+                            else:
+                                st.error(f"❌ No valid response from server for {traffic_file.name}")
+                                upload_success = False
+                    except Exception as e:
+                        error_str = str(e)
+                        if is_duplicate_error(error_str):
+                            st.warning(f"⚠️ File '{traffic_file.name}' already exists. Please use a different filename or delete the existing file first.")
+                        else:
+                            st.error(f"❌ Unexpected error uploading {traffic_file.name}: {error_str}")
+                        upload_success = False
             
             # Show overall result
             if upload_success and uploaded_files:
                 st.success(f"🎉 All files uploaded successfully: {', '.join(uploaded_files)}")
                 # Refresh the files data
                 st.session_state.files_data = get_files_data()
-                st.rerun()
-            elif not upload_success:
-                st.error("❌ Some files failed to upload. Please check the errors above.")
     
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -237,6 +287,19 @@ def render_file_selection(key_prefix: str = None):
     # Display file selection header
     st.markdown("### 📁 File Selection")
     st.markdown("Select the rules and logs files for analysis:")
+    # Prominent refresh control so users can repopulate lists without restarting
+    rcol1, rcol2 = st.columns([1, 6])
+    with rcol1:
+        refresh_key = f"refresh_file_list_{key_prefix}" if key_prefix else "refresh_file_list"
+        if st.button("🔄 Refresh file list", key=refresh_key):
+            # Re-fetch and update session state
+            rules_files = get_rules_files_from_supabase()
+            logs_files = get_traffic_files_from_supabase()
+            st.session_state.available_rules_files = rules_files
+            st.session_state.available_logs_files = logs_files
+            st.experimental_rerun()
+    with rcol2:
+        st.write("")
     
     # Initialize session state for file management
     if 'available_rules_files' not in st.session_state:

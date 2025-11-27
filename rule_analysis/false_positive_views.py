@@ -146,7 +146,7 @@ def detect_false_positives(request):
                 'detection_method': detection_method,
                 'threshold_used': threshold,
                 'false_positives_detected': false_positives_detected,
-                'total_rules_analyzed': 4,
+                'total_rules_analyzed': len(rule_ids),
                 'high_false_positive_rules': len(false_positives_detected)
             }
         })
@@ -253,44 +253,95 @@ def start_learning_mode(request):
             status='active'
         )
         
-        # Mock learning process - in real implementation, this would analyze traffic
-        # Simulate learning normal traffic patterns
-        normal_patterns = {
-            'user_agents': [
-                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-                'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36'
-            ],
-            'request_methods': ['GET', 'POST', 'PUT', 'DELETE'],
-            'common_paths': [
-                '/api/users/profile',
-                '/api/dashboard',
-                '/api/products',
-                '/api/orders'
-            ],
-            'ip_ranges': ['192.168.1.0/24', '10.0.0.0/8']
-        }
-        
+        # Real learning process: analyze the session's traffic file (from Supabase)
+        traffic_file = session.traffic_file
+        if not traffic_file:
+            learning_session.status = 'failed'
+            learning_session.save()
+            return Response({'error': 'Traffic file not found in session'}, status=400)
+
+        # Load traffic into DataFrame
+        try:
+            traffic_df = get_file_as_dataframe(traffic_file)
+        except Exception as e:
+            learning_session.status = 'failed'
+            learning_session.error_message = str(e)
+            learning_session.save()
+            return Response({'error': f'Failed to load traffic file: {str(e)}'}, status=500)
+
+        # Derive common patterns
+        user_agents = traffic_df['user_agent'].dropna().astype(str).value_counts().head(20).index.tolist() if 'user_agent' in traffic_df.columns else []
+        request_methods = traffic_df['request_method'].dropna().unique().tolist() if 'request_method' in traffic_df.columns else []
+        common_paths = traffic_df['request_uri'].dropna().astype(str).value_counts().head(20).index.tolist() if 'request_uri' in traffic_df.columns else []
+
+        # Top client IPs and simple /24 ranges for IPv4 addresses
+        top_ips = traffic_df['client_ip'].dropna().astype(str).value_counts().head(20).index.tolist() if 'client_ip' in traffic_df.columns else []
+        ip_ranges = []
+        for ip in top_ips[:10]:
+            if '.' in ip:
+                parts = ip.split('.')
+                if len(parts) == 4:
+                    ip_ranges.append(f"{parts[0]}.{parts[1]}.{parts[2]}.0/24")
+        ip_ranges = list(dict.fromkeys(ip_ranges))  # unique
+
+        # Baseline metrics
+        if 'request_size' in traffic_df.columns:
+            avg_request_size = float(traffic_df['request_size'].dropna().mean())
+            max_request_size = int(traffic_df['request_size'].dropna().quantile(0.99))
+        else:
+            # Fallback estimate using request_uri length
+            uri_lengths = traffic_df['request_uri'].dropna().astype(str).apply(len) if 'request_uri' in traffic_df.columns else pd.Series([])
+            avg_request_size = float(uri_lengths.mean()) if not uri_lengths.empty else 0
+            max_request_size = int(uri_lengths.quantile(0.99)) if not uri_lengths.empty else 0
+
+        avg_response_time = float(traffic_df['response_time'].dropna().mean()) if 'response_time' in traffic_df.columns else 0.0
+
+        # Requests per minute across the traffic timeframe
+        requests_per_minute = 0
+        unique_users_per_hour = 0
+        if 'timestamp' in traffic_df.columns:
+            try:
+                traffic_df['timestamp_parsed'] = pd.to_datetime(traffic_df['timestamp'], errors='coerce')
+                time_span = (traffic_df['timestamp_parsed'].max() - traffic_df['timestamp_parsed'].min()).total_seconds() / 60.0
+                total_requests = len(traffic_df)
+                if time_span > 0:
+                    requests_per_minute = total_requests / time_span
+                # unique users per hour (approx)
+                unique_ips = traffic_df.groupby(traffic_df['timestamp_parsed'].dt.floor('H'))['client_ip'].nunique()
+                unique_users_per_hour = int(unique_ips.mean()) if not unique_ips.empty else 0
+            except Exception:
+                requests_per_minute = 0
+                unique_users_per_hour = 0
+
         baseline_metrics = {
-            'avg_request_size': 1024,
-            'avg_response_time': 150,
-            'requests_per_minute': 50,
-            'unique_users_per_hour': 25
+            'avg_request_size': avg_request_size,
+            'avg_response_time': avg_response_time,
+            'requests_per_minute': float(requests_per_minute),
+            'unique_users_per_hour': int(unique_users_per_hour)
         }
-        
+
         anomaly_thresholds = {
-            'max_request_size': 10000,
-            'max_response_time': 5000,
-            'max_requests_per_minute': 200,
+            'max_request_size': max_request_size,
+            'max_response_time': int(traffic_df['response_time'].dropna().quantile(0.99)) if 'response_time' in traffic_df.columns else 0,
+            'max_requests_per_minute': int(requests_per_minute * 3) if requests_per_minute > 0 else 0,
             'suspicious_user_agent_patterns': ['bot', 'crawler', 'scanner']
         }
-        
-        # Update learning session with mock data
+
+        normal_patterns = {
+            'user_agents': user_agents,
+            'request_methods': request_methods,
+            'common_paths': common_paths,
+            'ip_ranges': ip_ranges
+        }
+
+        # Update learning session with derived data
         learning_session.normal_traffic_patterns = normal_patterns
         learning_session.baseline_metrics = baseline_metrics
         learning_session.anomaly_thresholds = anomaly_thresholds
-        learning_session.patterns_learned = len(normal_patterns['user_agents']) + len(normal_patterns['common_paths'])
-        learning_session.accuracy_score = 0.92
+        learning_session.patterns_learned = len(user_agents) + len(common_paths)
+        learning_session.accuracy_score = 0.0  # unknown until validated
+        learning_session.status = 'completed'
+        learning_session.completed_at = datetime.now()
         learning_session.save()
         
         return Response({
@@ -412,17 +463,20 @@ def export_whitelist_csv(request):
                         pass
                     supabase.storage.from_(bucket_name).upload(supabase_path, file_bytes)
 
-                uploaded_file = UploadedFile.objects.create(
-                    filename=export_name,
-                    file_type='rules',
-                    file_size=os.path.getsize(local_file_path),
-                    supabase_path=supabase_path
-                )
+                # Create metadata record in Supabase `uploaded_files` table
+                record = {
+                    'filename': export_name,
+                    'file_type': 'rules',
+                    'file_size': os.path.getsize(local_file_path),
+                    'supabase_path': supabase_path
+                }
+                insert_resp = supabase.table('uploaded_files').insert(record).execute()
+                insert_data = getattr(insert_resp, 'data', None) or (insert_resp.json().get('data') if hasattr(insert_resp, 'json') else None)
 
                 export_record.file_path = supabase_path
                 export_record.status = 'completed'
                 export_record.total_patterns = len(csv_data)
-                export_record.file_size_bytes = uploaded_file.file_size
+                export_record.file_size_bytes = record['file_size']
                 export_record.completed_at = datetime.now()
                 export_record.save()
 
