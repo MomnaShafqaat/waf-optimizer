@@ -11,7 +11,6 @@ from .analyzers import RuleRelationshipAnalyzer
 import io
 from rest_framework import status
 from django.shortcuts import get_object_or_404
-from .models import UploadedFile
 from .supabase_utils import get_file_as_string, get_file_as_dataframe
 
 """
@@ -46,7 +45,10 @@ def analyze_rules(request):
                     logs_content = get_file_as_string(session.traffic_file)
                     analysis_types = request.data.get('analysis_types', session.analysis_types or ['SHD', 'RXD'])
                 except Exception as e:
-                    return Response({'error': f'Failed to load session files: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                    # Distinguish network/storage problems and return 502 to the frontend
+                    err_msg = str(e)
+                    print(f"Error loading session files for session {session_id}: {err_msg}")
+                    return Response({'error': f'Failed to load session files: {err_msg}'}, status=status.HTTP_502_BAD_GATEWAY)
             else:
                 return Response({'error': 'Session does not reference both rules and traffic files'}, status=status.HTTP_400_BAD_REQUEST)
 

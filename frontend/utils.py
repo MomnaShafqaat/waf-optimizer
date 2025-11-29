@@ -4,6 +4,8 @@ import streamlit as st
 
 # API URLs
 API_URL = "http://127.0.0.1:8000/api/files/"
+FILES_SUMMARY_URL = "http://127.0.0.1:8000/api/files/summary/"
+HEALTH_URL = "http://127.0.0.1:8000/api/health/"
 RULE_ANALYSIS_API_URL = "http://127.0.0.1:8000/api/analyze/"
 # Sessions endpoint (RuleAnalysisSession ViewSet registered as 'sessions')
 SESSIONS_API_URL = "http://127.0.0.1:8000/api/sessions/"
@@ -24,7 +26,7 @@ SUGGESTION_DEPLOYMENT_URL = "http://127.0.0.1:8000/api/suggestions/deploy/"
 def check_backend_status():
     """Check if backend is online"""
     try:
-        response = requests.get(API_URL, timeout=3)
+        response = requests.get(HEALTH_URL, timeout=3)
         return response.status_code == 200
     except:
         return False
@@ -32,8 +34,15 @@ def check_backend_status():
 def get_files_data():
     """Get uploaded files data"""
     try:
-        response = requests.get(API_URL)
-        return response.json() if response.status_code == 200 else []
+        response = requests.get(FILES_SUMMARY_URL)
+        if response.status_code == 200:
+            data = response.json()
+            if isinstance(data, dict) and ('rules' in data or 'traffic' in data):
+                rules = data.get('rules', []) or []
+                traffic = data.get('traffic', []) or []
+                return rules + traffic
+            return data
+        return []
     except:
         return []
 
@@ -90,10 +99,27 @@ def analyze_rules(rules_content, logs_content, analysis_types):
 
 def generate_rule_ranking(rules_file_id, session_name):
     """Generate optimized rule ranking"""
-    data = {"rules_file_id": rules_file_id, "session_name": session_name}
-    
+    # Prefer sending file content rather than ids
     try:
-        response = requests.post(RANKING_API_URL, json=data)
+        import streamlit as st
+        rules_content = None
+        try:
+            rules_content = st.session_state.get('rules_file_content')
+        except Exception:
+            pass
+
+        # Decode bytes to string if necessary
+        if isinstance(rules_content, (bytes, bytearray)):
+            rules_content = rules_content.decode('utf-8')
+
+        payload = {"session_name": session_name}
+        if rules_content:
+            payload['rules_content'] = rules_content
+        else:
+            # fallback to identifier if content missing
+            payload['rules_file_id'] = rules_file_id
+
+        response = requests.post(RANKING_API_URL, json=payload)
         return response
     except Exception as e:
         st.error(f"Ranking generation error: {str(e)}")
@@ -111,7 +137,24 @@ def get_ranking_comparison(session_id):
 def update_performance_data():
     """Update performance data (FR03)"""
     try:
-        response = requests.post(HIT_COUNTS_UPDATE_URL, json={})
+        import streamlit as st
+        # Send file contents instead of IDs
+        rules_content = st.session_state.get('rules_file_content')
+        logs_content = st.session_state.get('logs_file_content')
+
+        # Decode bytes to string if necessary
+        if isinstance(rules_content, (bytes, bytearray)):
+            rules_content = rules_content.decode('utf-8')
+        if isinstance(logs_content, (bytes, bytearray)):
+            logs_content = logs_content.decode('utf-8')
+
+        payload = {}
+        if logs_content:
+            payload['traffic_content'] = logs_content
+        if rules_content:
+            payload['rules_content'] = rules_content
+
+        response = requests.post(HIT_COUNTS_UPDATE_URL, json=payload)
         return response
     except Exception as e:
         st.error(f"Performance update error: {str(e)}")

@@ -287,6 +287,19 @@ def render_file_selection(key_prefix: str = None):
     # Display file selection header
     st.markdown("### 📁 File Selection")
     st.markdown("Select the rules and logs files for analysis:")
+    # Prominent refresh control so users can repopulate lists without restarting
+    rcol1, rcol2 = st.columns([1, 6])
+    with rcol1:
+        refresh_key = f"refresh_file_list_{key_prefix}" if key_prefix else "refresh_file_list"
+        if st.button("🔄 Refresh file list", key=refresh_key):
+            # Re-fetch and update session state
+            rules_files = get_rules_files_from_supabase()
+            logs_files = get_traffic_files_from_supabase()
+            st.session_state.available_rules_files = rules_files
+            st.session_state.available_logs_files = logs_files
+            st.experimental_rerun()
+    with rcol2:
+        st.write("")
     
     # Initialize session state for file management
     if 'available_rules_files' not in st.session_state:

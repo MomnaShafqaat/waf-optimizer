@@ -293,108 +293,119 @@ def apply_custom_styles():
 
     </style>
     """, unsafe_allow_html=True)
-
 def render_header():
-    """Render the main header with enhanced dark theme based on MindLink design"""
+    """Header customized for WAF Optimizer"""
     st.markdown("""
     <div style="background: linear-gradient(135deg, #1a1a1a, #242424); padding: 32px 48px; margin: 0 auto; max-width: 900px; box-sizing: border-box;">
+
         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 32px;">
+
             <div>
                 <p style="margin: 0 0 4px 0; font-size: 28px; line-height: 1.2; color: #ffffff; font-weight: 600;">
-                    Good evening, Mark!
+                    WAF Optimizer Dashboard
                 </p>
                 <p style="margin: 4px 0 0 0; color: #a3a3a3; font-size: 16px;">
-                    What would you like to explore today?
+                    Monitor, analyze, and reduce false positives in real time.
                 </p>
             </div>
+
             <div style="display: flex; gap: 16px; align-items: center;">
                 <div style="background: #242424; padding: 8px; border-radius: 6px; position: relative; cursor: pointer; border: 1px solid #333333;">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#a3a3a3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-bell"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" stroke="#a3a3a3" stroke-width="2" fill="none" class="feather feather-bell">
+                        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                        <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                    </svg>
                     <div style="width: 8px; height: 8px; border-radius: 50%; background-color: #10b981; position: absolute; top: 6px; right: 6px; border: 2px solid #1a1a1a;"></div>
                 </div>
+
                 <div style="width: 1px; height: 30px; background-color: #404040;"></div>
+
                 <div style="background: #242424; padding: 8px; border-radius: 6px; cursor: pointer; border: 1px solid #333333;">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#a3a3a3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-star"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" stroke="#a3a3a3" stroke-width="2" fill="none" class="feather feather-shield">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                    </svg>
                 </div>
             </div>
-        </div>
-        </div>
-        """, unsafe_allow_html=True)
 
+        </div>
+
+    </div>
+    """, unsafe_allow_html=True)
 def render_main_dashboard():
-    """Renders a main content dashboard section based on MindLink design system."""
+    """Professional WAF analysis dashboard"""
     st.markdown("""
     <div style="max-width: 900px; margin: 0 auto; padding: 0 48px;">
+
         <div class="element-spacing">
-            <h3 style="margin-bottom: 16px; font-size: 16px; color: #a3a3a3;">Choose your focus</h3>
+            <h3 style="margin-bottom: 16px; font-size: 16px; color: #a3a3a3;">Select an analysis category</h3>
             <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 32px;">
-                <span class="pill pill-active">Summarize reports</span>
-                <span class="pill">Extract key insights</span>
-                <span class="pill">Compare projects</span>
-                <span class="pill">Answer questions</span>
-                <span class="pill">Draft documents</span>
+                <span class="pill pill-active">False Positive Reduction</span>
+                <span class="pill">Rule Performance</span>
+                <span class="pill">Traffic Insights</span>
+                <span class="pill">Threat Intelligence</span>
+                <span class="pill">Log Deep Analysis</span>
             </div>
         </div>
 
-        <div class="card" style="margin-bottom: 24px; padding: 20px 24px; display: flex; justify-content: space-between; align-items: center; background-color: #242424;">
+        <div class="card" style="margin-bottom: 24px; padding: 20px 24px; display: flex; justify-content: space-between; align-items: center;">
             <p style="margin: 0; font-size: 16px; color: #ffffff;">
-                Ask something about your workspace or documents.
+                Run an automated analysis on uploaded WAF logs.
             </p>
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#a3a3a3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-refresh-cw" style="cursor: pointer;"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.5 7.9c1.1-2.2 3.4-3.5 5.9-3.5h.5c4.6 0 8.5 3.5 8.9 8"></path><path d="M20.5 16.1c-1.1 2.2-3.4 3.5-5.9 3.5h-.5c-4.6 0-8.5-3.5-8.9-8"></path></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" stroke="#a3a3a3" fill="none" stroke-width="2" class="feather feather-cpu" style="cursor: pointer;">
+                <rect x="4" y="4" width="16" height="16" rx="2"></rect>
+                <path d="M9 9h6v6H9z"></path>
+                <path d="M3 9h1"/>
+                <path d="M3 12h1"/>
+                <path d="M3 15h1"/>
+                <path d="M20 9h1"/>
+                <path d="M20 12h1"/>
+                <path d="M20 15h1"/>
+            </svg>
         </div>
 
-        <div class="card" style="margin-bottom: 24px; padding: 32px; display: flex; gap: 24px; align-items: center; background-color: #242424;">
-            <div style="width: 120px; height: 120px; border-radius: 16px; padding: 16px; background: linear-gradient(135deg, #7c3aed, #8b5cf6, #ec4899); display: flex; justify-content: center; align-items: center;">
-                <svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-zap"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+        <div class="card" style="margin-bottom: 24px; padding: 32px; display: flex; gap: 24px; align-items: center;">
+            <div style="width: 120px; height: 120px; border-radius: 16px; padding: 16px;
+                background: linear-gradient(135deg, #7c3aed, #8b5cf6, #ec4899);
+                display: flex; justify-content: center; align-items: center;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" stroke="#ffffff" fill="none" stroke-width="2" class="feather feather-activity">
+                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                </svg>
             </div>
+
             <div style="flex: 1;">
                 <p style="margin: 0; font-size: 16px; line-height: 1.5; color: #ffffff;">
-                    Generate a one-page summary of the product roadmap.
+                    Analyze anomaly patterns and generate recommended rule adjustments.
                 </p>
                 <div style="display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 13px; color: #a3a3a3;">
-                    <div style="width: 8px; height: 8px; border-radius: 50%; background-color: #f59e0b;"></div> <!-- Loading dot -->
-                    Wait a minute
+                    <div style="width: 8px; height: 8px; border-radius: 50%; background-color: #f59e0b;"></div>
+                    Processing…
                 </div>
-            </div>
-        </div>
-        
-        <div class="card" style="margin-bottom: 24px; padding: 28px; background-color: #242424;">
-            <span class="badge" style="background-color: #ec4899; color: #ffffff; margin-bottom: 16px;">GOAL</span>
-            <p style="margin-bottom: 24px; font-size: 17px; line-height: 1.6; font-weight: 500; color: #ffffff;">
-                Deliver a unified, intelligent workspace that connects all company knowledge and enables contextual answers in real time.
-            </p>
-            <div style="padding: 16px 0; border-top: 1px solid #333333; display: flex; justify-content: space-between; gap: 16px;">
-                <div style="flex: 1;">
-                    <p style="margin: 0 0 8px 0; font-size: 15px; font-weight: 500; color: #ffffff;">Phase 1: Integrations</p>
-                    <p style="margin: 0; font-size: 14px; line-height: 1.5; color: #a3a3a3;">Connect Google Drive, Notion, Slack and Confluence as data sources.</p>
-                </div>
-                <span class="badge" style="background-color: #10b981; color: #000000; align-self: flex-start;">Completed</span>
-            </div>
-            <div style="padding: 16px 0; border-top: 1px solid #333333; display: flex; justify-content: space-between; gap: 16px;">
-                <div style="flex: 1;">
-                    <p style="margin: 0 0 8px 0; font-size: 15px; font-weight: 500; color: #ffffff;">Phase 2: Contextual chat</p>
-                    <p style="margin: 0; font-size: 14px; line-height: 1.5; color: #a3a3a3;">Launch Ask AI interface with smart document linking and reference citations.</p>
-                </div>
-                <span class="badge" style="background-color: #10b981; color: #000000; align-self: flex-start;">In Progress</span>
             </div>
         </div>
 
-        <div style="position: fixed; bottom: 32px; left: calc(250px + 48px); right: calc(320px + 48px); max-width: 900px; margin: 0 auto;">
-            <div style="padding: 8px 12px; border-radius: 28px; background-color: #242424; display: flex; gap: 8px; align-items: center; border: 1px solid #333333;">
-                <button style="padding: 10px; border-radius: 8px; width: 40px; height: 40px; background: none; border: none; cursor: pointer;">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#a3a3a3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-paperclip"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49L17.5 2.5A4 4 0 0 1 23 8l-7.1 7.1"></path></svg>
-                </button>
-                <button style="padding: 10px; border-radius: 8px; width: 40px; height: 40px; background: none; border: none; cursor: pointer;">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-zap"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
-                </button>
-                <input type="text" placeholder="Ask mindlink..." style="padding: 10px 12px; flex: 1; border: none; outline: none; background: transparent; color: #ffffff; font-size: 14px;">
-                <button style="padding: 10px; border-radius: 8px; width: 40px; height: 40px; background: none; border: none; cursor: pointer;">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#a3a3a3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-microphone"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
-                </button>
-                <button style="padding: 10px 24px; border-radius: 20px; background-color: #7c3aed; color: #ffffff; font-size: 14px; font-weight: 500; border: none; cursor: pointer;">
-                    Send
-                </button>
+        <div class="card" style="margin-bottom: 24px; padding: 28px;">
+            <span class="badge badge-purple" style="margin-bottom: 16px;">SYSTEM OBJECTIVE</span>
+
+            <p style="margin-bottom: 24px; font-size: 17px; line-height: 1.6; font-weight: 500; color: #ffffff;">
+                Improve WAF precision by reducing false positives while maintaining robust attack detection.
+            </p>
+
+            <div style="padding: 16px 0; border-top: 1px solid #333333; display: flex; justify-content: space-between;">
+                <div style="flex: 1;">
+                    <p style="margin: 0 0 8px 0; font-size: 15px; font-weight: 500; color: #ffffff;">Phase 1: Log Integration</p>
+                    <p style="margin: 0; font-size: 14px; color: #a3a3a3;">Connect log sources and validate data ingestion pipeline.</p>
+                </div>
+                <span class="badge badge-success">Completed</span>
+            </div>
+
+            <div style="padding: 16px 0; border-top: 1px solid #333333; display: flex; justify-content: space-between;">
+                <div style="flex: 1;">
+                    <p style="margin: 0 0 8px 0; font-size: 15px; font-weight: 500; color: #ffffff;">Phase 2: Automated Rule Scoring</p>
+                    <p style="margin: 0; font-size: 14px; color: #a3a3a3;">Generate dynamic confidence levels for each triggered rule.</p>
+                </div>
+                <span class="badge badge-warning">In Progress</span>
             </div>
         </div>
+
     </div>
     """, unsafe_allow_html=True)

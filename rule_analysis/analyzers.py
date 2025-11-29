@@ -15,6 +15,11 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
+
+class GroqModelDeprecated(Exception):
+    """Raised when the configured Groq model is decommissioned or unsupported"""
+    pass
+
 class GroqAIClient:
     """Centralized AI client for all WAF optimization tasks using Groq API"""
     
@@ -34,8 +39,8 @@ class GroqAIClient:
             "Content-Type": "application/json"
         }
         
-        # Test API connection on initialization
-        self._test_api_connection()
+        # Test API connection on initialization and expose availability flag
+        self.available = self._test_api_connection()
     
     def _test_api_connection(self):
         """Test Groq API connection with a simple request"""
@@ -102,9 +107,29 @@ class GroqAIClient:
             try:
                 error_response = response.json()
                 error_detail = f" - {error_response}"
-            except:
+            except Exception:
                 error_detail = f" - Response: {response.text}"
-            
+
+            # Detect decommissioned model errors and expose a specific exception
+            try:
+                err_obj = response.json()
+                if isinstance(err_obj, dict) and 'error' in err_obj:
+                    code = None
+                    msg = None
+                    if isinstance(err_obj['error'], dict):
+                        code = err_obj['error'].get('code')
+                        msg = err_obj['error'].get('message')
+                    else:
+                        msg = str(err_obj['error'])
+                    if code == 'model_decommissioned' or (isinstance(msg, str) and 'decommissioned' in msg.lower()):
+                        # Mark client as unavailable to avoid further calls
+                        self.available = False
+                        logger.error(f"Groq model decommissioned: {msg}")
+                        raise GroqModelDeprecated(msg)
+            except Exception:
+                # ignore parsing errors and continue to raise generic
+                pass
+
             logger.error(f"Groq API HTTP error {response.status_code}: {e}{error_detail}")
             raise Exception(f"Groq API HTTP error {response.status_code}: {e}")
             
@@ -410,6 +435,12 @@ class RuleAnalysisAIProcessor:
             print(f"✅ AI enhancement completed successfully")
             return analysis_results
 
+        except GroqModelDeprecated as e:
+            # Specific handling when the configured Groq model is decommissioned
+            logger.error(f"AI model decommissioned: {e}")
+            analysis_results["ai_available"] = False
+            analysis_results["ai_error"] = str(e)
+            return analysis_results
         except Exception as e:
             logger.error(f"AI enhancement failed: {e}")
             analysis_results["ai_available"] = False
