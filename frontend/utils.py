@@ -19,6 +19,7 @@ WHITELIST_SUGGESTIONS_URL = "http://127.0.0.1:8000/api/false-positives/suggestio
 LEARNING_MODE_START_URL = "http://127.0.0.1:8000/api/learning-mode/start/"
 LEARNING_MODE_STATUS_URL = "http://127.0.0.1:8000/api/learning-mode/status/"
 WHITELIST_EXPORT_URL = "http://127.0.0.1:8000/api/whitelist/export/"
+SUGGESTION_DEPLOYMENT_URL = "http://127.0.0.1:8000/api/suggestions/deploy/"
 
 def check_backend_status():
     """Check if backend is online"""
@@ -281,3 +282,64 @@ def get_false_positive_dashboard_api(session_id=None):
     except Exception as e:
         st.error(f"Dashboard error: {str(e)}")
         return None
+    
+def deploy_optimization_api(session_id: int, rule_a_id: str, rule_b_id: str, suggestion_action: str, optimized_rule_syntax: str):
+    """
+    Sends the specific AI-generated optimization to the backend for approval or deployment.
+    
+    Args:
+        session_id: The ID of the RuleAnalysisSession.
+        rule_a_id, rule_b_id: The rule pair identifiers.
+        suggestion_action: The recommended action (e.g., MERGE, REORDER).
+        optimized_rule_syntax: The actual rule code to be applied.
+    """
+    data = {
+        'session_id': session_id,
+        'rule_a_id': rule_a_id,
+        'rule_b_id': rule_b_id,
+        'action': suggestion_action,
+        'optimized_rule': optimized_rule_syntax,
+    }
+    
+    try:
+        # Use a longer timeout as this might trigger a complex configuration change on the backend
+        response = requests.post(SUGGESTION_DEPLOYMENT_URL, json=data, timeout=90)
+        return response
+    except Exception as e:
+        st.error(f"Deployment API error: {str(e)}")
+        # Return a mock failed response structure
+        return type('Response', (object,), {'status_code': 500, 'json': lambda: {'error': str(e)}})
+
+
+def apply_suggestion_callback(session_id: int, rule_a_id: str, rule_b_id: str, suggestion: dict):
+    """
+    Streamlit callback function that executes the deployment API utility.
+    """
+    st.session_state['deployment_pending'] = True
+    st.session_state['last_applied_id'] = f"SUG-{rule_a_id}-{rule_b_id}"
+    st.session_state['apply_message'] = f"Attempting deployment for {rule_a_id} vs {rule_b_id}..."
+    
+    # Extract necessary fields from the full suggestion dictionary
+    action = suggestion.get('action', 'REVIEW')
+    optimized_syntax = suggestion.get('optimized_rule', '')
+    
+    # Call the deployment API
+    response = deploy_optimization_api(
+        session_id=session_id,
+        rule_a_id=rule_a_id,
+        rule_b_id=rule_b_id,
+        suggestion_action=action,
+        optimized_rule_syntax=optimized_syntax
+    )
+    
+    if response and response.status_code == 200:
+        st.session_state['deployment_pending'] = False
+        st.session_state['apply_message'] = f"✅ Deployment success! Action: {action}"
+    else:
+        try:
+            error_details = response.json().get('error', response.text)
+        except:
+            error_details = response.status_code
+            
+        st.session_state['deployment_pending'] = False
+        st.session_state['apply_message'] = f"❌ Deployment failed (Status: {error_details}). Review logs."

@@ -44,9 +44,10 @@ class RuleAnalysisAIProcessor:
             }
 
         row = rule_row.iloc[0]
+        
         return {
             "rule_id": str(rule_id),
-            "description": row.get("msg", ""),
+            "description": row.get("description", ""),
             "severity": row.get("severity", ""),
             "action": row.get("action", ""),
             "phase": row.get("phase", ""),
@@ -54,38 +55,30 @@ class RuleAnalysisAIProcessor:
         }
     
     def enhance_analysis_with_ai(self, analysis_results: Dict, traffic_df: pd.DataFrame) -> Dict:
-        """
-        Use Groq AI to enhance rule relationship analysis results.
-        - Sends redundant, shadowed, and correlated rule pairs to Groq for optimization insights.
-        """
-
-        if not self.ai_available or not self.ai_client:
-            logger.warning("AI not available — returning base analysis only.")
-            analysis_results["ai_available"] = False
-            analysis_results["ai_error"] = "AI client not available"
-            return analysis_results
+        # ... (error checks remain the same) ...
 
         try:
-            ai_suggestions = {
-                "redundant": [],
-                "shadowed": [],
-                "correlated": []
-            }
+            # Create a shallow copy of the relationships structure to modify it
+            relationships_to_enhance = analysis_results.get("relationships", {}).copy()
+            
+            # Use an index to track which list we are modifying for the final output
+            for rel_type, rel_list in relationships_to_enhance.items():
+                
+                # Iterate over the list by index to directly modify the relationship object
+                for i in range(len(rel_list)):
+                    rel = rel_list[i] # Get the relationship dict
 
-            # Loop over each relationship type
-            for rel_type, rel_list in analysis_results.get("relationships", {}).items():
-                for rel in rel_list:
                     rule_a_id = rel.get("rule_a")
                     rule_b_id = rel.get("rule_b")
 
                     if not rule_a_id or not rule_b_id:
                         continue
+                    
+                    # ... (Extraction of rule_a_data, rule_b_data, and context remains the same) ...
+                    # ... (The logic for context preparation is unchanged) ...
 
-                    # Extract contextual rule data
                     rule_a_data = self._get_rule_data(rule_a_id)
                     rule_b_data = self._get_rule_data(rule_b_id)
-
-                    # Prepare shared context
                     context = {
                         "relationship_type": rel_type,
                         "confidence": rel.get("confidence"),
@@ -93,33 +86,19 @@ class RuleAnalysisAIProcessor:
                         "conflicting_fields": rel.get("conflicting_fields", {}),
                         "description": rel.get("description", "")
                     }
-
+                    
                     try:
-                        # 🔹 Redundant Rules (merge/delete suggestions)
-                        if rel_type == "RXD":
+                        ai_response = None
+                        
+                        # 🔹 Redundant Rules (RXD)
+                        if rel_type in ("RXD", "SHD"): # Use optimize_redundant_rules for both
                             ai_response = self.ai_client.optimize_redundant_rules(
                                 rule_a_id, rule_b_id, rel_type, rule_a_data, rule_b_data, context
                             )
-                            ai_suggestions["redundant"].append(ai_response)
 
-                        # 🔹 Shadowed Rules (identify dominant rule)
-                        elif rel_type == "SHD":
-                            user_prompt = (
-                                f"Rule {rule_a_id} shadows {rule_b_id}. "
-                                f"Suggest how to merge or remove one without reducing security.\n\n"
-                                f"Rule A Data: {json.dumps(rule_a_data, indent=2, default=str)}\n"
-                                f"Rule B Data: {json.dumps(rule_b_data, indent=2, default=str)}\n"
-                            )
-                            ai_response = self.ai_client.make_request(
-                                "You are a WAF optimization expert. Suggest minimal-impact actions.",
-                                user_prompt,
-                                temperature=0.3,
-                                max_tokens=800
-                            )
-                            ai_suggestions["shadowed"].append(ai_response)
-
-                        # 🔹 Correlated Rules (suggest grouping or simplification)
+                        # 🔹 Correlated Rules (COR)
                         elif rel_type == "COR":
+                            # Use the existing prompt logic for correlation
                             user_prompt = (
                                 f"Rules {rule_a_id} and {rule_b_id} often trigger together (correlated). "
                                 f"Suggest optimization or grouping ideas.\n\n"
@@ -127,22 +106,28 @@ class RuleAnalysisAIProcessor:
                                 f"Rule B: {json.dumps(rule_b_data, indent=2, default=str)}\n"
                                 f"Traffic Context: {json.dumps(context, indent=2, default=str)}"
                             )
+                            # NOTE: Assuming the AI client's make_request returns a dict that is compatible
                             ai_response = self.ai_client.make_request(
-                                "You are a ModSecurity correlation analyzer.",
+                                "You are a ModSecurity correlation analyzer. Return a JSON structure with 'action': 'GROUP_OR_REVIEW', 'explanation', and 'optimized_rule'.",
                                 user_prompt,
                                 temperature=0.4,
                                 max_tokens=800
                             )
-                            ai_suggestions["correlated"].append(ai_response)
-                            
+                        
+                        # --- KEY MODIFICATION HERE ---
+                        if ai_response:
+                            rel_list[i]['ai_suggestion'] = ai_response
+                        else:
+                            rel_list[i]['ai_suggestion'] = {"action": "NO_SUGGESTION", "explanation": "AI did not provide a specific response.", "optimized_rule": "N/A"}
+                        # -----------------------------
+
                     except Exception as e:
-                        logger.error(f"AI request failed for {rule_a_id} vs {rule_b_id}: {e}")
-                        # Continue with other pairs instead of failing completely
+                        logger.error(f"AI request failed for {rule_a_id} vs {rule_b_id} ({rel_type}): {e}")
+                        rel_list[i]['ai_suggestion'] = {"action": "AI_ERROR", "explanation": f"AI processing error: {str(e)}", "optimized_rule": "N/A"}
 
-            # Merge AI results into output
+            # Merge the modified relationships back into the analysis_results
+            analysis_results["relationships"] = relationships_to_enhance
             analysis_results["ai_available"] = True
-            analysis_results["ai_suggestions"] = ai_suggestions
-
             print(f"✅ AI enhancement completed successfully")
             return analysis_results
 

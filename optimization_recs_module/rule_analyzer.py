@@ -2,7 +2,7 @@
 
 import pandas as pd
 import numpy as np
-from typing import Dict, List
+from typing import Dict, List 
 import re
 import logging
 from collections import defaultdict
