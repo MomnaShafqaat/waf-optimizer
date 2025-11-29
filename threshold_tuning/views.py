@@ -12,55 +12,69 @@ from io import StringIO
 load_dotenv()
 supabase = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_SERVICE_ROLE_KEY"))
 
-
 @api_view(['POST'])
-def delete_threshold_suggestion(request, suggestion_id):
-    """Delete a threshold suggestion"""
-    try:
-        suggestion = ThresholdSuggestion.objects.get(id=suggestion_id)
-        suggestion.delete()
-        return Response({"message": f"Suggestion {suggestion_id} deleted successfully."})
-    except ThresholdSuggestion.DoesNotExist:
-        return Response({"error": "Suggestion not found."}, status=status.HTTP_404_NOT_FOUND)
-@api_view(['GET'])
 def threshold_tuning_view(request):
     """
-    Threshold Tuning API
-    Reads latest ModSecurity CSV from uploads/ → finds best threshold → saves to DB
+    Threshold Tuning API - Uses selected file from Supabase
     """
     try:
-        uploads_folder = "uploads"
-
-        files = [
-            f for f in os.listdir(uploads_folder)
-            if f.lower().endswith(".csv") and ("modsec" in f.lower() or "log" in f.lower())
-        ]
-
-        if not files:
+        # Get the selected filename from request
+        selected_filename = request.data.get('filename')
+        
+        if not selected_filename:
             return Response(
-                {"error": "No uploaded traffic/log file found in uploads/. "
-                          "Ask team to upload ModSecurity logs first."},
+                {"error": "No filename provided. Please select a file for analysis."},
+                status=400
+            )
+        
+        # Download file directly from Supabase storage (waf-log-files bucket)
+        try:
+            file_content = supabase.storage.from_("waf-log-files").download(selected_filename)
+            
+            if not file_content:
+                return Response(
+                    {"error": f"File '{selected_filename}' not found in Supabase storage"},
+                    status=400
+                )
+                
+        except Exception as e:
+            return Response(
+                {"error": f"Failed to download file from Supabase: {str(e)}"},
+                status=400
+            )
+        
+        # Read CSV from downloaded content
+        try:
+            # Convert bytes to string for pandas
+            if isinstance(file_content, bytes):
+                csv_content = file_content.decode('utf-8')
+            else:
+                csv_content = str(file_content)
+            
+            df = pd.read_csv(StringIO(csv_content))
+            
+        except Exception as e:
+            return Response(
+                {"error": f"Failed to parse CSV file: {str(e)}"},
                 status=400
             )
 
-        files = sorted(files, key=lambda f: os.path.getmtime(os.path.join(uploads_folder, f)), reverse=True)
-        file_path = os.path.join(uploads_folder, files[0])
-
-        df = pd.read_csv(file_path)
-
+        # Validate required columns
         if "anomaly_score" not in df.columns:
             return Response({"error": "Missing 'anomaly_score' column in CSV"}, status=400)
 
         if "action" not in df.columns:
             return Response({"error": "Missing 'action' column in CSV"}, status=400)
 
+        # Process the data
         df["actual_label"] = df["action"].apply(
             lambda x: 1 if str(x).lower() in ["blocked", "denied", "intercepted"] else 0
         )
         df["score"] = df["anomaly_score"].astype(float)
 
+        # Find optimal threshold
         best_threshold, best_accuracy = 0, 0
-        for th in np.arange(0, 20.0, 1.0):  # anomaly score generally 0–20+
+        for th in np.arange(0, 20.0, 1.0):
             df["predicted"] = (df["score"] >= th).astype(int)
             TP = ((df["actual_label"] == 1) & (df["predicted"] == 1)).sum()
             TN = ((df["actual_label"] == 0) & (df["predicted"] == 0)).sum()
@@ -75,7 +89,7 @@ def threshold_tuning_view(request):
 
         return Response({
             "message": "Threshold tuning completed successfully.",
-            "file_used": files[0],
+            "file_used": selected_filename,
             "best_threshold": round(best_threshold, 2),
             "accuracy": round(best_accuracy, 3),
             "records_tested": len(df),
@@ -85,6 +99,16 @@ def threshold_tuning_view(request):
     except Exception as e:
         return Response({"error": str(e)}, status=400)
 
+# ... (keep the other functions the same)
+@api_view(['POST'])
+def delete_threshold_suggestion(request, suggestion_id):
+    """Delete a threshold suggestion"""
+    try:
+        suggestion = ThresholdSuggestion.objects.get(id=suggestion_id)
+        suggestion.delete()
+        return Response({"message": f"Suggestion {suggestion_id} deleted successfully."})
+    except ThresholdSuggestion.DoesNotExist:
+        return Response({"error": "Suggestion not found."}, status=status.HTTP_404_NOT_FOUND)
 
 @api_view(['GET'])
 def list_threshold_suggestions(request):
@@ -101,7 +125,6 @@ def list_threshold_suggestions(request):
         for s in suggestions
     ]
     return Response({"suggestions": data}, status=status.HTTP_200_OK)
-
 
 @api_view(['POST'])
 def approve_threshold_suggestion(request, suggestion_id):

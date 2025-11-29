@@ -19,17 +19,42 @@ def threshold_tuning_module():
     </div>
     """, unsafe_allow_html=True)
     
+    # File Selection Section - Use the file selected in file_handling.py
+    st.markdown("### 📁 Selected File for Analysis")
+    
+    # Get the selected logs file from session state
+    selected_logs_file = st.session_state.get('selected_logs_file')
+    
+    if not selected_logs_file:
+        st.warning("⚠️ Please select a logs file in the File Selection section first.")
+        st.markdown('</div>', unsafe_allow_html=True)
+        return
+    
+    st.success(f"✅ Using selected file: **{selected_logs_file['name']}**")
+    
+    # Get file info
+    file_content = st.session_state.get('logs_file_content')
+    if file_content:
+        file_size = len(file_content)
+    else:
+        file_size = "Unknown"
+    
     # Main functionality
     col1, col2 = st.columns([2, 1])
     
     with col1:
         st.markdown("### 📊 Run Threshold Analysis")
-        st.write("Analyze uploaded traffic logs to find optimal anomaly score threshold")
+        st.write(f"Analyze **{selected_logs_file['name']}** to find optimal anomaly score threshold")
         
         if st.button("🚀 Run Threshold Tuning", type="primary", use_container_width=True):
-            with st.spinner("Analyzing traffic patterns and finding optimal threshold..."):
+            with st.spinner(f"Analyzing {selected_logs_file['name']} and finding optimal threshold..."):
                 try:
-                    response = requests.post('http://127.0.0.1:8000/api/threshold_tuning/')
+                    # Send selected filename to backend
+                    response = requests.post(
+                        'http://127.0.0.1:8000/api/threshold_tuning/',
+                        json={'filename': selected_logs_file['name']},
+                        timeout=30
+                    )
                     
                     if response.status_code == 200:
                         result = response.json()
@@ -47,17 +72,22 @@ def threshold_tuning_module():
                     st.info("💡 Make sure Django backend is running on port 8000")
     
     with col2:
-        st.markdown("### ⚙️ Settings")
-        st.info("""
-        **Input Requirements:**
-        - CSV files in `uploads/` folder
-        - Must contain `anomaly_score` column
-        - Must contain `action` column
+        st.markdown("### ⚙️ File Information")
+        st.info(f"""
+        **Selected File:**
+        - **Name:** {selected_logs_file['name']}
+        - **Size:** {file_size} bytes
+        - **Type:** Traffic Logs
+        - **Source:** Supabase Storage
+        
+        **Required Columns:**
+        - `anomaly_score`
+        - `action`
         """)
         
-        # Quick actions
-        if st.button("🔄 Check Uploads Folder", type="secondary"):
-            check_uploads_folder()
+        # Quick file validation
+        if st.button("🔍 Validate File Structure", type="secondary"):
+            validate_file_structure(selected_logs_file['name'])
     
     # Display existing suggestions
     display_existing_suggestions()
@@ -78,7 +108,7 @@ def display_threshold_results(result):
     with col3:
         st.metric("Records Tested", result['records_tested'])
     with col4:
-        st.metric("File Used", result['file_used'][:15] + "...")
+        st.metric("File Used", result['file_used'][:15] + "..." if len(result['file_used']) > 15 else result['file_used'])
     
     # Detailed explanation
     with st.expander("📋 View Detailed Analysis"):
@@ -100,7 +130,7 @@ def display_existing_suggestions():
     st.markdown("### 💾 Saved Suggestions")
     
     try:
-        response = requests.get('http://127.0.0.1:8000/threshold_suggestions/')
+        response = requests.get('http://127.0.0.1:8000/api/threshold_suggestions/')
         
         if response.status_code == 200:
             data = response.json()
@@ -145,7 +175,7 @@ def display_existing_suggestions():
                     if st.button("👍 Approve Selected Suggestion", type="primary"):
                         suggestion_id = suggestion_options[selected_suggestion]
                         approve_response = requests.post(
-                            f'http://127.0.0.1:8000/threshold_suggestions/approve/{suggestion_id}/'
+                            f'http://127.0.0.1:8000/api/threshold_suggestions/approve/{suggestion_id}/'
                         )
                         
                         if approve_response.status_code == 200:
@@ -165,15 +195,33 @@ def display_existing_suggestions():
     except Exception as e:
         st.error(f"🚨 Error loading suggestions: {str(e)}")
 
-def check_uploads_folder():
-    """Check what files are available in uploads folder"""
+def validate_file_structure(filename):
+    """Validate that the selected file has the required structure"""
     try:
-        # This would typically call a backend endpoint to list uploads
-        st.info("🔍 Checking uploads folder...")
-        # For now, we rely on the threshold_tuning API to handle file detection
-        st.success("✅ Uploads folder is accessible")
+        # Get file content from session state
+        file_content = st.session_state.get('logs_file_content')
+        
+        if not file_content:
+            st.error("❌ File content not available in session state")
+            return
+        
+        # Read CSV to check structure
+        import io
+        df = pd.read_csv(io.StringIO(file_content))
+        
+        # Check required columns
+        required_columns = ['anomaly_score', 'action']
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        
+        if missing_columns:
+            st.error(f"❌ Missing required columns: {', '.join(missing_columns)}")
+        else:
+            st.success("✅ File structure is valid!")
+            st.write(f"**Columns found:** {', '.join(df.columns.tolist())}")
+            st.write(f"**Total records:** {len(df)}")
+            
     except Exception as e:
-        st.error(f"❌ Error checking uploads: {str(e)}")
+        st.error(f"❌ Error validating file: {str(e)}")
 
 def render_header():
     """Render the main header with enhanced dark theme based on MindLink design"""
@@ -216,18 +264,34 @@ def render_threshold_tuning():
     </div>
     """, unsafe_allow_html=True)
     
+    # File Selection Section
+    st.markdown("### 📁 Selected File for Analysis")
+    
+    selected_logs_file = st.session_state.get('selected_logs_file')
+    
+    if not selected_logs_file:
+        st.warning("⚠️ Please select a logs file in the File Selection section first.")
+        st.markdown('</div>', unsafe_allow_html=True)
+        return
+    
+    st.success(f"✅ Using selected file: **{selected_logs_file['name']}**")
+    
     # Main functionality
     col1, col2 = st.columns([2, 1])
     
     with col1:
         st.markdown("### 📊 Run Threshold Analysis")
-        st.write("Analyze uploaded traffic logs to find optimal anomaly score threshold")
+        st.write(f"Analyze **{selected_logs_file['name']}** to find optimal anomaly score threshold")
         
         if st.button("🚀 Run Threshold Tuning", type="primary", use_container_width=True):
-            with st.spinner("Analyzing traffic patterns and finding optimal threshold..."):
+            with st.spinner(f"Analyzing {selected_logs_file['name']}..."):
                 try:
-                    # CHANGED: Using GET instead of POST to avoid CSRF
-                    response = requests.get('http://127.0.0.1:8000/api/threshold_tuning/', timeout=30)
+                    # Send selected filename to backend
+                    response = requests.post(
+                        'http://127.0.0.1:8000/api/threshold_tuning/',
+                        json={'filename': selected_logs_file['name']},
+                        timeout=30
+                    )
                     
                     if response.status_code == 200:
                         result = response.json()
@@ -242,10 +306,12 @@ def render_threshold_tuning():
     
     with col2:
         st.markdown("### ⚙️ Settings")
-        st.info("""
-        **API Endpoint:**
-        `GET http://127.0.0.1:8000/api/threshold_tuning/`
+        st.info(f"""
+        **Selected File:**
+        `{selected_logs_file['name']}`
         
+        **API Endpoint:**
+        `POST http://127.0.0.1:8000/api/threshold_tuning/`
         """)
     
     # Display existing suggestions
@@ -253,94 +319,4 @@ def render_threshold_tuning():
     
     st.markdown('</div>', unsafe_allow_html=True)
 
-def display_existing_suggestions():
-    """Display existing threshold suggestions"""
-    st.markdown("---")
-    st.markdown("### 💾 Saved Suggestions")
-    
-    try:
-        response = requests.get('http://127.0.0.1:8000/api/threshold_suggestions/')
-        
-        if response.status_code == 200:
-            data = response.json()
-            suggestions = data.get('suggestions', [])
-            
-            if suggestions:
-                df = pd.DataFrame(suggestions)
-                
-                # Format the dataframe for better display
-                display_df = df[['id', 'value', 'approved', 'applied', 'created_at']].copy()
-                display_df['created_at'] = pd.to_datetime(display_df['created_at']).dt.strftime('%Y-%m-%d %H:%M')
-                display_df['status'] = display_df.apply(
-                    lambda row: '✅ Approved' if row['approved'] else '⏳ Pending', 
-                    axis=1
-                )
-                
-                st.dataframe(
-                    display_df.rename(columns={
-                        'id': 'ID',
-                        'value': 'Threshold',
-                        'status': 'Status',
-                        'created_at': 'Created'
-                    }),
-                    use_container_width=True
-                )
-                
-                # Approval and Delete functionality
-                st.markdown("#### 🔧 Manage Suggestions")
-                all_suggestions = {f"ID {s['id']}: Threshold {s['value']}": s['id'] for s in suggestions}
-                
-                selected_suggestion = st.selectbox(
-                    "Choose suggestion to manage:",
-                    options=list(all_suggestions.keys())
-                )
-                
-                col1, col2 = st.columns([1, 1])
-                with col1:
-                    if st.button("👍 Approve Selected", type="primary", use_container_width=True):
-                        suggestion_id = all_suggestions[selected_suggestion]
-                        approve_response = requests.post(
-                            f'http://127.0.0.1:8000/api/threshold_suggestions/approve/{suggestion_id}/'
-                        )
-                        
-                        if approve_response.status_code == 200:
-                            st.success("✅ Suggestion approved successfully!")
-                            st.rerun()
-                        else:
-                            st.error("❌ Approval failed")
-                
-                with col2:
-                    if st.button("🗑️ Delete Selected", type="secondary", use_container_width=True):
-                        suggestion_id = all_suggestions[selected_suggestion]
-                        
-                        # Confirm deletion
-                        with st.expander("⚠️ Confirm Deletion", expanded=True):
-                            st.warning(f"Are you sure you want to delete suggestion {suggestion_id}?")
-                            col1, col2 = st.columns(2)
-                            with col1:
-                                if st.button("✅ Yes, Delete", type="primary"):
-                                    try:
-                                        delete_response = requests.post(
-                                            f'http://127.0.0.1:8000/api/threshold_suggestions/delete/{suggestion_id}/'
-                                        )
-                                        
-                                        if delete_response.status_code == 200:
-                                            st.success("🗑️ Suggestion deleted successfully!")
-                                            st.rerun()
-                                        else:
-                                            st.error(f"❌ Delete failed: {delete_response.text}")
-                                    except Exception as e:
-                                        st.error(f"🚨 Delete error: {str(e)}")
-                            with col2:
-                                if st.button("❌ Cancel"):
-                                    st.info("Deletion cancelled")
-                    
-            else:
-                st.info("📝 No threshold suggestions yet. Run analysis first.")
-                
-        else:
-            st.error(f"❌ Failed to load suggestions: {response.status_code}")
-            
-    except Exception as e:
-        st.error(f"🚨 Error loading suggestions: {str(e)}")
-        
+# Remove the duplicate display_existing_suggestions function since we already have one above
