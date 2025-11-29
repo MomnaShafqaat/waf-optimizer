@@ -90,7 +90,7 @@ def analyze_rules(rules_content, logs_content, analysis_types):
             'analysis_types': [atype[:3].upper() for atype in analysis_types]
         }
         
-        response = requests.post(RULE_ANALYSIS_API_URL, json=analysis_data, timeout=30)
+        response = requests.post(RULE_ANALYSIS_API_URL, json=analysis_data, timeout=60)
         return response
         
     except Exception as e:

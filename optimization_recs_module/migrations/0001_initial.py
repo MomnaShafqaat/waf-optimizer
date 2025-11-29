@@ -9,7 +9,7 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('data_management', '0004_remove_uploadedfile_file_and_more'),
+        #('data_management', '0004_remove_uploadedfile_file_and_more'),
     ]
 
     operations = [

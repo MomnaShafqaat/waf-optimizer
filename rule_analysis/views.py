@@ -7,7 +7,6 @@ import pandas as pd
 import json
 #from .models import RuleAnalysisSession, RuleRelationship
 from data_management.models import UploadedFile
-from .analyzers import RuleRelationshipAnalyzer
 import io
 from rest_framework import status
 from django.shortcuts import get_object_or_404
